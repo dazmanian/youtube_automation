@@ -1,0 +1,8 @@
+venv/
+__pycache__/
+*.db
+*.mp4
+ffmpeg.exe
+ffprobe.exe
+*.exe
+chrome_profiles/
