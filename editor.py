@@ -4,7 +4,7 @@ import sys
 import numpy as np
 from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip, vfx
 from moviepy.config import change_settings
-from moviepy.video.fx.all import crop, resize
+from moviepy.video.fx.all import crop, resize, gamma_corr, lum_contrast, mirror_x
 
 # --- CONFIGURARE INDUSTRIALĂ ---
 DB_NAME = "youtube_empire.db"
@@ -91,8 +91,9 @@ def proceseaza_video(cale_input, titlu_produs, id_video):
         # Background
         bg_clip = clip.resize(height=1920) 
         bg_clip = bg_clip.crop(x1=bg_clip.w/2 - 540, width=1080, height=1920)
-        bg_clip = bg_clip.resize(0.05).resize(20) # Blur puternic
-        bg_clip = bg_clip.fx(vfx.colorx, 0.4) # Întunecat (ca să se vadă scrisul)
+        bg_clip = bg_clip.fx(vfx.mirror_x)
+        bg_clip = bg_clip.resize(0.08).resize(12.5)
+        bg_clip = bg_clip.fx(vfx.colorx, 0.35)
 
         # Main Video
         main_clip = clip.resize(width=1080)
@@ -127,31 +128,60 @@ def proceseaza_video(cale_input, titlu_produs, id_video):
                 txt_sus = txt_sus.set_position(('center', 200)).set_duration(clip.duration)
                 elemente.append(txt_sus)
                 '''
-                # --- SCHIMBAREA 3: LINK IN BIO RIDICAT ---
-                # Îl mutăm mai sus ca să nu fie acoperit de descrierea YouTube
-                glow = TextClip("LINK IN BIO 👇", 
-                              fontsize=72, 
-                              color='#00FFFF', # Cyan pentru vibe-ul 3D
-                              font=FONT_ALES, 
-                              stroke_color='#00FFFF', 
-                              stroke_width=15).set_opacity(0.4)
                 
-                # 2. Creăm Textul Principal (Cel "curat")
-                txt_principal = TextClip("LINK IN BIO 👇", 
-                         fontsize=70, 
-                         color='white', 
-                         font=FONT_ALES, 
-                         stroke_color='#008B8B', 
-                         stroke_width=2)
+                # --- MRBEAST STYLE CTA: "THE DOPAMINE STACK" ---
+
+                # 1. LAYER-UL DE BAZĂ (Shadow/Outline) - "Ancora"
+                # Rol: Asigură că textul se citește perfect chiar și pe fundal alb sau colorat.
+                # MrBeast folosește mereu contur negru gros.
+                shadow = TextClip("LINK IN BIO 👇", 
+                                 fontsize=75,                # Puțin mai mare
+                                 color='black',              # Negru pur
+                                 font=FONT_ALES, 
+                                 stroke_color='black', 
+                                 stroke_width=20,            # Contur MASIV (Outline)
+                                 method='caption', size=(950, None))
+
+                # 2. LAYER-UL DE NEON (Glow) - "Atractorul"
+                # Rol: Atrage ochiul periferic. Cyan-ul electric este culoarea cu cea mai mare vizibilitate digitală.
+                neon = TextClip("LINK IN BIO 👇", 
+                                 fontsize=75, 
+                                 color='#00FFFF',            # Electric Cyan
+                                 font=FONT_ALES, 
+                                 stroke_color='#00FFFF', 
+                                 stroke_width=8,             # Un glow mediu
+                                 method='caption', size=(950, None)).set_opacity(0.8) # Aproape opac!
                 
-                # 3. Suprapunem straturile pentru a simula profunzimea
-                # Punem glow-ul exact în același loc, el fiind mai mare va ieși de sub textul alb
-                txt_jos_glow = glow.set_position(('center', 1450)).set_duration(clip.duration)
-                txt_jos_main = txt_principal.set_position(('center', 1450)).set_duration(clip.duration)
-                txt_jos_glow = txt_jos_glow.resize(lambda t: 1 + 0.05 * np.sin(5 * t))
-                # Adăugăm ambele straturi în listă
-                elemente.append(txt_jos_glow)
-                elemente.append(txt_jos_main)
+                # 3. LAYER-UL PRINCIPAL (Text) - "Mesajul"
+                # Rol: Claritate HD. Albul pe negru/cyan este contrastul suprem.
+                text_alb = TextClip("LINK IN BIO 👇", 
+                                 fontsize=75, 
+                                 color='white',              # Alb Imaculat
+                                 font=FONT_ALES, 
+                                 method='caption', size=(950, None))
+                
+                # --- ANIMAȚIA PSIHOLOGICĂ (Heartbeat) ---
+                # Facem textul să "respire" (pulseze). Asta creează urgență subconștientă.
+                # Funcția sinoidală (sin) face textul să crească și să scadă fin.
+                import numpy as np
+                
+                # Definim poziția (Jos, centrat)
+                pos_y = 1450
+                
+                # Aplicăm animația doar pe Neon și Shadow pentru efect 3D, textul alb rămâne fix sau pulsează ușor
+                neon = neon.resize(lambda t: 1 + 0.04 * np.sin(5 * t))  # Puls rapid
+                shadow = shadow.resize(lambda t: 1 + 0.04 * np.sin(5 * t)) 
+                text_alb = text_alb.resize(lambda t: 1 + 0.04 * np.sin(5 * t))
+                
+                # Le așezăm în poziție
+                shadow = shadow.set_position(('center', pos_y)).set_duration(clip.duration)
+                neon = neon.set_position(('center', pos_y)).set_duration(clip.duration)
+                text_alb = text_alb.set_position(('center', pos_y)).set_duration(clip.duration)
+
+                # Adăugăm în ordine (Spate -> Față)
+                elemente.append(shadow)   # Fundalul negru
+                elemente.append(neon)     # Strălucirea
+                elemente.append(text_alb) # Textul clar
                 
             except Exception as e:
                 print(f"⚠️ [TEXT ERROR]: {e}")
