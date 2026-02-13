@@ -2,6 +2,7 @@ import sqlite3
 import os
 import time
 from selenium import webdriver
+import pyperclip
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -57,6 +58,14 @@ def force_write(driver, element_xpath, text, field_name="Necunoscut"):
         # Nu printăm eroarea completă ca să nu speriem utilizatorul, doar zicem că încercăm alta
         return False
 
+def salveaza_descrierea_finala(video_id, text_descriere):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE videos SET descriere=? WHERE id=?", (text_descriere, video_id))
+    conn.commit()
+    conn.close()
+    print(f"💾 [DB]: Descrierea generată a fost salvată pentru ID {video_id}.")
+
 def upload_selenium():
     video_data = get_video_ready()
     
@@ -70,11 +79,43 @@ def upload_selenium():
     if not os.path.exists(cale_video):
         print(f"❌ [EROARE]: Fișierul nu există: {cale_video}")
         return
+    
+    # 1. Pregătim Titlul (Scurt și Impactant)
+    titlu_final = video_data['titlu_video']
+    if len(titlu_final) > 90:
+        titlu_final = titlu_final[:90] + "..."
 
-    descriere = f"""{video_data['titlu_video']}
+    # 2. Pregătim Link-ul (Dacă nu există, punem unul generic sau de canal)
+    '''
+    link_afiliere = video_data['affiliate_link']
+    if not link_afiliere or link_afiliere == "None":
+        link_afiliere = "https://www.youtube.com/@CanalulTau" # Fallback
+    '''
 
-🔥 GET IT HERE:
+    # 3. CONSTRUIM DESCRIEREA "SEO BOMBER"
+    # Aceasta este structura care aduce vizualizări organice
+    descriere = f"""{titlu_final} 🤯
+
+🛒 BUY HERE:
 👉 {video_data['affiliate_link']}
+👉 {video_data['affiliate_link']}
+
+🌟 Why you need this gadget:
+This is one of the best Amazon finds of 2026! If you love cool gadgets, tech reviews, and home hacks, this video is for you. Don't forget to subscribe for daily product hunting!
+
+🔍 Search Tags:
+#shorts #amazonfinds #gadgets #tech #musthaves #tiktokmademebuyit #giftideas #productreview
+
+🛑 Disclaimer:
+As an Amazon Associate, I earn from qualifying purchases. This helps support the channel!
+
+🎥 Video Credit: {video_data['sursa_url']}
+"""
+    # --- PASUL CRUCIAL: Salvăm în DB să nu mai vedem NULL ---
+    try:
+        salveaza_descrierea_finala(video_data['id'], descriere)
+    except Exception as e:
+        print(f"⚠️ Nu am putut salva descrierea în DB, dar continuăm upload-ul: {e}")
 
 #shorts #gadgets #tech"""
 
@@ -129,19 +170,46 @@ def upload_selenium():
             print("❌ EROARE CRITICĂ: Nu am reușit să scriu Titlul cu nicio metodă!")
 
         # --- 2. DESCRIERE ---
-        print("📝 [DESCRIERE]: Încerc scrierea...")
+        print("📝 [DESCRIERE]: Încerc scrierea prin metoda Clipboard...")
         # Lista de metode pentru DESCRIERE
         xpaths_descriere = [
-            "//div[@id='description-textarea']//div[@id='textbox']", # Oficial
-            "(//div[@contenteditable='true'])[2]",                   # Brut (Al doilea element)
-            "//div[contains(@aria-label, 'Tell viewers') or contains(@aria-label, 'Descriere')]//div[@contenteditable='true']" # Semantic
+           # Metoda ID-ul nou (cel mai sigur acum)
+           "//ytcp-social-suggestions-textbox[@id='description-textarea']//div[@id='textbox']",
+           # Metoda bazată pe rolul de accesibilitate
+           "//div[@aria-label='Tell viewers about your video' or @aria-label='Descrieți videoclipul']",
+           # Metoda generică de fallback
+           "//div[@id='description-textarea']//div[@contenteditable='true']"
         ]
 
         desc_ok = False
         for xpath in xpaths_descriere:
-            if force_write(driver, xpath, descriere, "DESCRIERE"):
-                desc_ok = True
-                break
+            try:
+                  # 1. Așteptăm elementul să fie gata
+                  element_desc = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, xpath)))
+        
+                  # 2. Click forțat pentru a activa cursorul
+                  driver.execute_script("arguments[0].click();", element_desc)
+                  time.sleep(1)
+        
+                  # 3. Curățăm ce era înainte (opțional, dar sigur)
+                  element_desc.send_keys(Keys.CONTROL + 'a')
+                  element_desc.send_keys(Keys.BACKSPACE)
+        
+                  # 4. Punem textul în Clipboard și dăm PASTE
+                  pyperclip.copy(descriere) # 'descriere' este variabila ta din DB
+                  time.sleep(0.5)
+                  element_desc.send_keys(Keys.CONTROL + 'v')
+        
+                  # 5. Verificăm dacă s-a scris ceva
+                  time.sleep(1.5)
+                  text_introdus = element_desc.get_attribute("innerText") or ""
+                  if len(text_introdus.strip()) > 5:
+                       print(f"✅ [DESCRIERE]: Scrisă cu succes ({len(text_introdus)} caractere)!")
+                       desc_ok = True
+                       break
+            except Exception as e:
+                  print(f"❌ Metoda XPath a eșuat, încerc următoarea...")
+                  continue
         
         if not desc_ok:
             print("⚠️ ATENȚIE: Nu am putut scrie descrierea. Video va fi urcat fără descriere.")

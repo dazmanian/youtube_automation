@@ -19,14 +19,15 @@ def get_db_connection():
 
 def initializeaza_db():
     """
-    Construiește structura imperiului.
+    Construiește structura imperiului și face UPDATE automat dacă lipsesc coloane.
     """
     conn = get_db_connection()
     if not conn: return
 
     cursor = conn.cursor()
     
-    # STRUCTURA ACTUALIZATĂ (FIX: am adăugat cale_fisier)
+    # 1. CREARE TABEL (Pentru instalări noi)
+    # Am adăugat 'descriere' direct aici pentru viitor
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS videos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,15 +35,16 @@ def initializeaza_db():
             -- Date de intrare
             sursa_url TEXT UNIQUE,
             titlu_video TEXT,
+            descriere TEXT,         -- <--- NOU: Coloana pentru textul SEO
             cont_target TEXT,       -- 'Gadgets' sau 'Home'
             affiliate_link TEXT,
             
             -- Management de stare
-            status TEXT DEFAULT 'pending', -- pending, download_ready, downloaded, processed, uploaded
+            status TEXT DEFAULT 'pending', 
             retry_count INTEGER DEFAULT 0,
             
-            -- Căile fișierelor (AICI ERA PROBLEMA)
-            cale_fisier TEXT,       -- Calea curentă a fișierului (fie el brut sau editat)
+            -- Căile fișierelor
+            cale_fisier TEXT,       
             
             -- Jurnal de bord
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -53,9 +55,24 @@ def initializeaza_db():
         )
     ''')
     
+    # 2. AUTO-REPARARE (MIGRATIONS)
+    # Asta rezolvă problema ta actuală ("no such column: descriere")
+    # Încearcă să adauge coloana. Dacă există, ignoră eroarea.
+    try:
+        cursor.execute("ALTER TABLE videos ADD COLUMN descriere TEXT")
+        print("🔧 [DB UPDATE]: Am adăugat automat coloana lipsă 'descriere'.")
+    except sqlite3.OperationalError:
+        # Eroarea asta apare dacă coloana există deja. E de bine!
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE videos ADD COLUMN titlu_video TEXT")
+    except sqlite3.OperationalError:
+        pass
+
     conn.commit()
     conn.close()
-    print(f"🏛️  [DATABASE]: Arhiva '{DB_NAME}' este actualizată și gata.")
+    print(f"🏛️  [DATABASE]: Baza de date '{DB_NAME}' este verificată și completă.")
 
 def adauga_video(url, link_afiliere, cont, titlu):
     """

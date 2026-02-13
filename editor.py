@@ -1,8 +1,10 @@
 import sqlite3
 import os
 import sys
+import numpy as np
 from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip, vfx
 from moviepy.config import change_settings
+from moviepy.video.fx.all import crop, resize
 
 # --- CONFIGURARE INDUSTRIALĂ ---
 DB_NAME = "youtube_empire.db"
@@ -79,7 +81,7 @@ def proceseaza_video(cale_input, titlu_produs, id_video):
         clip = VideoFileClip(cale_input)
         
         # 2. Speed Up (1.1x) - Pentru retenție
-        clip = clip.fx(vfx.speedx, 1.1)
+        #clip = clip.fx(vfx.speedx, 1.1)
 
         # 3. Limitare durată (59s)
         if clip.duration > 59:
@@ -89,8 +91,8 @@ def proceseaza_video(cale_input, titlu_produs, id_video):
         # Background
         bg_clip = clip.resize(height=1920) 
         bg_clip = bg_clip.crop(x1=bg_clip.w/2 - 540, width=1080, height=1920)
-        bg_clip = bg_clip.resize(0.1).resize(10) # Blur pixelat
-        bg_clip = bg_clip.fx(vfx.colorx, 0.6) # Întunecat
+        bg_clip = bg_clip.resize(0.05).resize(20) # Blur puternic
+        bg_clip = bg_clip.fx(vfx.colorx, 0.4) # Întunecat (ca să se vadă scrisul)
 
         # Main Video
         main_clip = clip.resize(width=1080)
@@ -102,18 +104,57 @@ def proceseaza_video(cale_input, titlu_produs, id_video):
         # 5. TEXTE (Doar dacă avem ImageMagick)
         if found_magick:
             try:
-                # Titlu SUS
-                clean_title = ''.join(e for e in titlu_produs if e.isalnum() or e.isspace())[:30].upper()
-                txt_sus = TextClip(clean_title, fontsize=70, color='yellow', font='Impact', stroke_color='black', stroke_width=3, size=(900, None), method='caption')
-                txt_sus = txt_sus.set_position(('center', 150)).set_duration(clip.duration)
+                
+                FONT_ALES = 'TheBoldFont.ttf'
+                '''
+                # Curățăm titlul
+                clean_title = ''.join(e for e in titlu_produs if e.isalnum() or e.isspace())[:25].upper()
+                
+                # Numele fișierului tău de font (trebuie să fie lângă script!)
+                
+                
+                # --- SCHIMBAREA 2: TITLU PREMIUM ---
+                # Galben Auriu (#FFD700) + Contur Negru Gros
+                txt_sus = TextClip(clean_title, 
+                                   fontsize=70, 
+                                   color='#FFD700',      # Auriu
+                                   font=FONT_ALES,    # Font Gros
+                                   stroke_color='black', 
+                                   stroke_width=5,       # Contur foarte vizibil
+                                   method='caption',
+                                   size=(900, None))
+                # Poziționat la 15% din înălțime (Sus, vizibil)
+                txt_sus = txt_sus.set_position(('center', 200)).set_duration(clip.duration)
                 elemente.append(txt_sus)
-
-                # CTA JOS
-                txt_jos = TextClip("LINK IN BIO 👇", fontsize=60, color='white', font='Arial', stroke_color='black', stroke_width=3)
-                txt_jos = txt_jos.set_position(('center', 1650)).set_duration(clip.duration)
-                elemente.append(txt_jos)
+                '''
+                # --- SCHIMBAREA 3: LINK IN BIO RIDICAT ---
+                # Îl mutăm mai sus ca să nu fie acoperit de descrierea YouTube
+                glow = TextClip("LINK IN BIO 👇", 
+                              fontsize=72, 
+                              color='#00FFFF', # Cyan pentru vibe-ul 3D
+                              font=FONT_ALES, 
+                              stroke_color='#00FFFF', 
+                              stroke_width=15).set_opacity(0.4)
+                
+                # 2. Creăm Textul Principal (Cel "curat")
+                txt_principal = TextClip("LINK IN BIO 👇", 
+                         fontsize=70, 
+                         color='white', 
+                         font=FONT_ALES, 
+                         stroke_color='#008B8B', 
+                         stroke_width=2)
+                
+                # 3. Suprapunem straturile pentru a simula profunzimea
+                # Punem glow-ul exact în același loc, el fiind mai mare va ieși de sub textul alb
+                txt_jos_glow = glow.set_position(('center', 1450)).set_duration(clip.duration)
+                txt_jos_main = txt_principal.set_position(('center', 1450)).set_duration(clip.duration)
+                txt_jos_glow = txt_jos_glow.resize(lambda t: 1 + 0.05 * np.sin(5 * t))
+                # Adăugăm ambele straturi în listă
+                elemente.append(txt_jos_glow)
+                elemente.append(txt_jos_main)
+                
             except Exception as e:
-                print(f"⚠️ [TEXT SKIP]: Eroare la generare text: {e}")
+                print(f"⚠️ [TEXT ERROR]: {e}")
 
         # 6. Export
         final_video = CompositeVideoClip(elemente, size=(1080, 1920))
@@ -130,7 +171,7 @@ def proceseaza_video(cale_input, titlu_produs, id_video):
             fps=30,
             codec='libx264',
             audio_codec='aac',
-            bitrate="5000k",
+            bitrate="6000k",
             preset='ultrafast', 
             threads=4,
             logger=None # Ascunde spam-ul, arată doar bara
