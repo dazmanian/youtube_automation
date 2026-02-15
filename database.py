@@ -1,14 +1,16 @@
 import sqlite3
 import datetime
+import os
 import time
 
 # --- CONFIGURARE ---
 DB_NAME = "youtube_empire.db"
 
+def clear_screen():
+    # Curăță ecranul pentru un aspect PRO (Windows/Mac/Linux)
+    os.system('cls' if os.name == 'nt' else 'clear')
+
 def get_db_connection():
-    """
-    Creează o conexiune robustă cu timeout.
-    """
     try:
         conn = sqlite3.connect(DB_NAME, timeout=30.0) 
         conn.row_factory = sqlite3.Row 
@@ -18,153 +20,157 @@ def get_db_connection():
         return None
 
 def initializeaza_db():
-    """
-    Construiește structura imperiului și face UPDATE automat dacă lipsesc coloane.
-    """
     conn = get_db_connection()
     if not conn: return
-
     cursor = conn.cursor()
     
-    # 1. CREARE TABEL (Pentru instalări noi)
-    # Am adăugat 'descriere' direct aici pentru viitor
+    # Creare Tabel Principal (Cu toate coloanele necesare)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS videos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            
-            -- Date de intrare
-            sursa_url TEXT UNIQUE,
+            sursa_url TEXT,
             titlu_video TEXT,
-            descriere TEXT,         -- <--- NOU: Coloana pentru textul SEO
-            cont_target TEXT,       -- 'Gadgets' sau 'Home'
+            descriere TEXT,
+            cont_target TEXT,
             affiliate_link TEXT,
-            
-            -- Management de stare
             status TEXT DEFAULT 'pending', 
-            retry_count INTEGER DEFAULT 0,
-            
-            -- Căile fișierelor
-            cale_fisier TEXT,       
-            
-            -- Jurnal de bord
+            cale_fisier TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             uploaded_at TIMESTAMP,
-            
-            -- Diagnostic
             error_log TEXT
         )
     ''')
     
-    # 2. AUTO-REPARARE (MIGRATIONS)
-    # Asta rezolvă problema ta actuală ("no such column: descriere")
-    # Încearcă să adauge coloana. Dacă există, ignoră eroarea.
-    try:
-        cursor.execute("ALTER TABLE videos ADD COLUMN descriere TEXT")
-        print("🔧 [DB UPDATE]: Am adăugat automat coloana lipsă 'descriere'.")
-    except sqlite3.OperationalError:
-        # Eroarea asta apare dacă coloana există deja. E de bine!
-        pass
-
-    try:
-        cursor.execute("ALTER TABLE videos ADD COLUMN titlu_video TEXT")
-    except sqlite3.OperationalError:
-        pass
+    # Siguranță: Încercăm să adăugăm coloane dacă lipsesc (pentru baze vechi)
+    try: cursor.execute("ALTER TABLE videos ADD COLUMN descriere TEXT")
+    except: pass
+    try: cursor.execute("ALTER TABLE videos ADD COLUMN error_log TEXT")
+    except: pass
 
     conn.commit()
     conn.close()
-    print(f"🏛️  [DATABASE]: Baza de date '{DB_NAME}' este verificată și completă.")
 
-def adauga_video(url, link_afiliere, cont, titlu):
-    """
-    Adaugă o nouă misiune în registru.
-    """
+# --- FUNCȚII DE RAPORTARE (DASHBOARD) ---
+def raport_elon_musk():
     conn = get_db_connection()
-    if not conn: return
-
+    cursor = conn.cursor()
+    
+    # Statistici
     try:
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO videos (sursa_url, affiliate_link, cont_target, titlu_video, created_at)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (url, link_afiliere, cont, titlu, datetime.datetime.now()))
+        cursor.execute("SELECT COUNT(*) FROM videos")
+        total = cursor.fetchone()[0]
         
+        cursor.execute("SELECT COUNT(*) FROM videos WHERE status='pending'")
+        pending = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM videos WHERE status='uploaded'")
+        uploaded = cursor.fetchone()[0]
+    except:
+        total = 0; pending = 0; uploaded = 0
+
+    conn.close()
+
+    # Grafică Dashboard
+    clear_screen()
+    print("\n🚀  YOUTUBE EMPIRE COMMAND CENTER  🚀")
+    print("════════════════════════════════════════")
+    print(f"📦 TOTAL INVENTAR:    {total} videoclipuri")
+    print(f"⏳ ÎN AȘTEPTARE:      {pending}")
+    print(f"✅ DEJA POSTATE:      {uploaded}")
+    print("════════════════════════════════════════")
+    
+    # Calcul "Runway" (Câte zile de libertate ai)
+    zile_libertate = pending  # Presupunând 1 postare pe zi per cont
+    if zile_libertate > 0:
+        print(f"💎 LIBERTATE: Ai conținut asigurat pentru {zile_libertate} zile!")
+    else:
+        print(f"⚠️  ALARMĂ: Stoc epuizat! Pornește Generatorul!")
+    print("════════════════════════════════════════\n")
+
+def vezi_coada_detaliata():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT id, cont_target, titlu_video, status FROM videos WHERE status='pending' ORDER BY id ASC LIMIT 10")
+        rows = cursor.fetchall()
+    except: rows = []
+    conn.close()
+
+    print("📋 URMĂTOARELE 10 VIDEOCLIPURI LA RÂND:")
+    print(f"{'ID':<5} | {'CONT':<10} | {'TITLU (Scurtat)':<30}")
+    print("-" * 50)
+    
+    if not rows:
+        print("   (Niciun video în așteptare)")
+    else:
+        for row in rows:
+            t = row['titlu_video'] if row['titlu_video'] else "Fara Titlu"
+            titlu_scurt = (t[:27] + '..') if len(t) > 27 else t
+            print(f"{row['id']:<5} | {row['cont_target']:<10} | {titlu_scurt:<30}")
+    print("\n")
+
+# --- FUNCȚII DE ACȚIUNE ---
+def adauga_video_manual():
+    print("📝 ADĂUGARE MANUALĂ (Doar pentru teste/urgențe)")
+    url = input("🔗 Link Video: ").strip()
+    if not url: return
+    cont = input("🎯 Cont (Gadgets/Home): ").strip()
+    titlu = input("📝 Titlu: ").strip()
+    
+    conn = get_db_connection()
+    try:
+        conn.execute('''
+            INSERT INTO videos (sursa_url, cont_target, titlu_video, created_at)
+            VALUES (?, ?, ?, ?)
+        ''', (url, cont, titlu, datetime.datetime.now()))
         conn.commit()
-        print(f"✅ [INSERT]: Video adăugat în coada pentru {cont}!")
-        
-    except sqlite3.IntegrityError:
-        print("⚠️ [DUPLICAT]: Acest link există deja în sistem. Ignor.")
+        print("✅ Salvat!")
+        time.sleep(1)
     except Exception as e:
-        print(f"❌ [EROARE INSERT]: {e}")
+        print(f"❌ Eroare: {e}")
+        input("Apasă Enter...")
     finally:
         conn.close()
 
-def sterge_video(video_id):
+def sterge_video():
+    vid_id = input("🗑️  ID-ul videoului de șters: ")
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM videos WHERE id=?", (video_id,))
+    conn.execute("DELETE FROM videos WHERE id=?", (vid_id,))
     conn.commit()
     conn.close()
-    print(f"🗑️  [DELETE]: Video ID {video_id} șters.")
+    print("✅ Șters cu succes!")
+    time.sleep(1)
 
-def vezi_statistici():
+def reset_errors():
+    # Funcție "God Mode" - Resetează videoclipurile blocate
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    print("\n════════════════════════════════════════")
-    print("📊 RAPORT DE STARE IMPERIU")
-    print("════════════════════════════════════════")
-    
-    cursor.execute("SELECT status, COUNT(*) FROM videos GROUP BY status")
-    rows = cursor.fetchall()
-    
-    if not rows:
-        print("📭 Baza de date este goală.")
-    else:
-        for row in rows:
-            print(f" • {row['status'].upper()}: {row[1]} videoclipuri")
-
-    print("\n--- DETALII COADA PENDING ---")
-    cursor.execute("SELECT id, cont_target, titlu_video FROM videos WHERE status='pending'")
-    pending = cursor.fetchall()
-    for row in pending:
-         print(f"ID [{row['id']}] | 🎯 {row['cont_target']} | 🎬 {row['titlu_video']}")
-         
-    print("════════════════════════════════════════\n")
+    cursor.execute("UPDATE videos SET status='pending' WHERE status='error'")
+    changes = cursor.rowcount
+    conn.commit()
     conn.close()
+    print(f"🔧 Am reparat {changes} videoclipuri care aveau erori.")
+    time.sleep(2)
 
-# --- INTERFAȚA DE COMANDĂ (CLI) ---
+# --- MENIU PRINCIPAL ---
 if __name__ == "__main__":
     initializeaza_db()
     
     while True:
-        print("\n🎛️  CENTRUL DE COMANDĂ")
-        print("1. ➕ Adaugă Video Nou")
-        print("2. 📊 Vezi Statistici & Coada")
-        print("3. ❌ Șterge un Video (după ID)")
+        raport_elon_musk()
+        vezi_coada_detaliata()
+        
+        print("ACTION MENU:")
+        print("1. ➕ Adaugă Video Manual (Urgență)")
+        print("2. 🗑️  Șterge un Video")
+        print("3. 🔧 Reparator (Resetează Erorile)")
         print("4. 👋 Ieșire")
         
-        optiune = input("\nComanda ta, Sire? (1-4): ")
+        optiune = input("\nCEO > ")
         
-        if optiune == "1":
-            url = input("🔗 Link Video (YouTube/TikTok): ").strip()
-            if not url: continue
-            cont = input("🎯 Cont (Gadgets/Home): ").strip()
-            titlu = input("📝 Titlu (organizare): ").strip()
-            link_af = input("💰 Link Afiliere (opțional): ").strip()
-            adauga_video(url, link_af, cont, titlu)
-            
-        elif optiune == "2":
-            vezi_statistici()
-            
-        elif optiune == "3":
-            try:
-                vid_id = input("🆔 ID-ul videoului de șters: ")
-                sterge_video(vid_id)
-            except:
-                print("ID invalid.")
-
-        elif optiune == "4":
-            print("Sistem închis.")
+        if optiune == "1": adauga_video_manual()
+        elif optiune == "2": sterge_video()
+        elif optiune == "3": reset_errors()
+        elif optiune == "4": 
+            print("To the moon! 🚀")
             break
-        else:
-            print("Comandă necunoscută.")
