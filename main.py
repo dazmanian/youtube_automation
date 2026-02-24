@@ -1,6 +1,5 @@
 import os
 import time
-import sys
 
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -8,8 +7,8 @@ def clear_screen():
 def banner():
     clear_screen()
     print("╔════════════════════════════════════════╗")
-    print("║   🚀 YOUTUBE EMPIRE AUTOMATION V2.0    ║")
-    print("║        (Miliardar Mode Active)         ║")
+    print("║   🚀 YOUTUBE EMPIRE AUTOMATION V3.0    ║")
+    print("║        (Poker Split Edition ♠️)         ║")
     print("╚════════════════════════════════════════╝")
 
 def main_menu():
@@ -17,7 +16,7 @@ def main_menu():
         banner()
         print("\n🎛️  PANOU DE CONTROL:")
         print("1. 📥 [DOWNLOADER]: Descarcă video brut")
-        print("2. 🏭 [GENERATOR]:  Crează 5 variante (Split/AI/Text)")
+        print("2. 🏭 [GENERATOR]:  Crează 5 variante (50/50 Poker Split)")
         print("3. 🚀 [UPLOADER]:   Postează pe YouTube")
         print("4. 📊 [DATABASE]:   Vezi Statistici & Coada")
         print("5. ❌ Ieșire")
@@ -44,6 +43,7 @@ def main_menu():
 
         elif choice == "4":
             os.system("python database.py")
+            input("\n✅ Apasă Enter să revii la meniu...")
             
         elif choice == "5":
             print("Succes, CEO! 👋")

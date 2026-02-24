@@ -5,8 +5,15 @@ import numpy as np
 import pyttsx3 # Vocea AI
 import asyncio
 import edge_tts
+import math
+import time
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
 from datetime import datetime, timedelta
-from moviepy.editor import VideoFileClip, CompositeVideoClip, TextClip, vfx, ColorClip, clips_array, AudioFileClip, CompositeAudioClip
+from moviepy.editor import VideoFileClip, CompositeVideoClip, TextClip, vfx, ColorClip, clips_array, AudioFileClip, CompositeAudioClip, ImageClip
 from moviepy.video.fx.all import gamma_corr, lum_contrast, mirror_x, speedx, fadein, fadeout
 
 # --- 1. CONFIGURARE IMAGEMAGICK ---
@@ -17,21 +24,20 @@ change_settings({"IMAGEMAGICK_BINARY": r"C:\Program Files\ImageMagick-7.1.2-Q16-
 PATH_OUTPUT = "output_videos"
 VIDEO_SURSA = "video_brut.mp4"
 DB_NAME = "youtube_empire.db"
-FOLDER_SATISFYING = os.path.join("assets", "satisfying")
+FOLDER_POKER = os.path.join("assets", "pokerclips")
 
 # --- INPUT INTERACTIV ---
-print("\n💎 --- CONFIGURARE PREMIUM V2 (FIXED COLORS) ---")
-TITLU_PRODUS = input("1. Nume Produs (ex: Flying Orb Ball): ").strip()
+print("\n💎 --- GENERATOR V8.0 (POKER SPLIT EXCLUSIVE) ---")
+TITLU_PRODUS = input("1. Nume Produs: ").strip()
 LINK_AFILIERE = input("2. Link Afiliere: ").strip()
 LINK_SURSA = input("3. Sursă Video: ").strip()
-CONT_TARGET = input("4. Cont Target (Gadgets / Home): ").strip()
+CONT_TARGET = input("4. Cont Target(Gadgets): ").strip()
+START_SEC = input("5. Secunda de start (ex: 120 pt min 2:00) [Lasă GOL pt Automat]: ").strip()
 
 if not TITLU_PRODUS or not LINK_AFILIERE: exit()
 
-# --- FUNCȚII AUXILIARE ---
-
+# --- 3. FUNCȚII AUXILIARE ---
 def resize_to_fill(clip, target_w, target_h):
-    """Bulldozer Crop: Mărește cu 1% extra ca să nu avem erori de crop."""
     if clip.w == 0 or clip.h == 0: return clip
     scale_x = target_w / clip.w
     scale_y = target_h / clip.h
@@ -44,48 +50,92 @@ def resize_to_fill(clip, target_w, target_h):
         return clip.resize((target_w, target_h))
 
 async def _genereaza_voce_async(text, nume_fisier):
-    """Motorul asincron pentru Edge TTS"""
-    # VOICES DISPONIBILE TOP TIER:
-    # "en-US-ChristopherNeural" -> Voce masculină, serioasă, tech, documentar (BEST FOR GADGETS)
-    # "en-US-AriaNeural"        -> Voce feminină, entuziastă, TikTok style
-    # "en-US-GuyNeural"         -> Voce masculină, casual, știri
-    
     VOICE = "en-US-ChristopherNeural" 
-    
     communicate = edge_tts.Communicate(text, VOICE)
     await communicate.save(nume_fisier)
-    
+
 def genereaza_voce_ai(text):
-    """Wrapper sincron pentru funcția asincronă (ca să nu stricăm restul codului)"""
     nume_fisier = "voce_temp.mp3"
     try:
-        # Rulăm procesul asincron într-un mod sincron
         asyncio.run(_genereaza_voce_async(text, nume_fisier))
-        
-        if os.path.exists(nume_fisier):
-            return nume_fisier
-        else:
-            return None
+        if os.path.exists(nume_fisier): return nume_fisier
+        return None
     except Exception as e:
         print(f"⚠️ [VOCE EROARE]: {e}")
         return None
 
-def adauga_in_imperiu(cale_video, titlu_final, descriere_finala, stil):
+def extrage_pret_amazon(url_amazon):
+    print(f"🔍 [SCRAPER]: Verific prețul pe Amazon...")
+    options = Options()
+    options.add_argument("--headless")  # Nu deschide fereastra Chrome
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--lang=en-US")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+    try:
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
+        
+        # Pasul 1: Mergem pe Amazon US direct pentru a seta un cookie de regiune
+        driver.get("https://www.amazon.com/?language=en_US&currency=USD")
+        driver.add_cookie({"name": "i18n-prefs", "value": "USD", "domain": ".amazon.com"})
+        driver.add_cookie({"name": "lc-main", "value": "en_US", "domain": ".amazon.com"})
+        
+        # Pasul 2: Mergem la produsul tău
+        separator = "&" if "?" in url_amazon else "?"
+        url_final = f"{url_amazon}{separator}language=en_US&currency=USD"
+        
+        driver.get(url_final)
+        time.sleep(5) # Lăsăm timp pentru redirectările de monedă
+
+        # Pasul 3: Extracție cu verificare
+        try:
+            # Luăm partea întreagă
+            pret_raw = driver.find_element(By.CLASS_NAME, "a-price-whole").text
+            # Luăm zecimalele
+            zecimale_raw = driver.find_element(By.CLASS_NAME, "a-price-fraction").text
+            
+            # Curățăm orice caracter non-numeric (scot puncte/virgule de RO)
+            pret_curat = "".join(filter(str.isdigit, pret_raw))
+            zecimale_curat = "".join(filter(str.isdigit, zecimale_raw))
+
+            if not pret_curat:
+                # Uneori prețul e în altă clasă dacă e ofertă fulger
+                pret_alt = driver.find_element(By.ID, "priceblock_ourprice").text
+                pret_final = pret_alt
+            else:
+                pret_final = f"${pret_curat}.{zecimale_curat}"
+        except:
+            pret_final = "Check Price"
+
+        # Extracție Reducere
+        reducere = None
+        try:
+            reducere = driver.find_element(By.CLASS_NAME, "savingsPercentage").text.replace('-', '').strip()
+        except:
+            pass
+
+        print(f"💰 [SUCCES]: Preț final setat: {pret_final} ({reducere if reducere else 'No Disc'})")
+        return pret_final, reducere
+
+    except Exception as e:
+        print(f"⚠️ [SCRAPER EROARE]: {e}")
+        return "Check Price", None
+    finally:
+        driver.quit()
+def adauga_in_imperiu(cale, titlu, descriere, stil):
     try:
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
-        url_unic = f"{LINK_SURSA}_{stil}_{random.randint(10000,99999)}"
-        cursor.execute('''
-            INSERT INTO videos (sursa_url, affiliate_link, cont_target, titlu_video, descriere, cale_fisier, created_at, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
-        ''', (url_unic, LINK_AFILIERE, CONT_TARGET, titlu_final, descriere_finala, cale_video, datetime.now()))
+        url_u = f"{LINK_SURSA}_{stil}_{random.randint(1000,9999)}"
+        cursor.execute("INSERT INTO videos (sursa_url, affiliate_link, cont_target, titlu_video, descriere, cale_fisier, status) VALUES (?,?,?,?,?,?, 'pending')", 
+                       (url_u, LINK_AFILIERE, CONT_TARGET, titlu, descriere, cale))
         conn.commit()
         conn.close()
-        print(f"🏛️ [DB]: Varianta '{stil}' salvată cu succes!")
-    except Exception as e:
-        print(f"❌ [DB EROARE]: {e}")
+    except Exception as e: print(f"⚠️ DB Error: {e}")
 
-# --- ENGINE PRINCIPAL ---
+# --- 4. ENGINE PRINCIPAL ---
 def main():
     if not os.path.exists(PATH_OUTPUT): os.makedirs(PATH_OUTPUT)
     if not os.path.exists(VIDEO_SURSA):
@@ -93,140 +143,167 @@ def main():
         return
 
     print(f"\n🎬 Procesez: {TITLU_PRODUS}")
+    
+    pret_real, reducere_reala = extrage_pret_amazon(LINK_AFILIERE)
+    
     try: clip_mare = VideoFileClip(VIDEO_SURSA)
     except: return
 
     durata_totala = clip_mare.duration
     W, H = 1080, 1920 
 
-    stiluri = ["split", "speed", "dark", "zoom", "mirror"]
-
-    for i, stil in enumerate(stiluri):
-        print(f"🔨 Varianta {i+1}: {stil.upper()}")
+    # 🔥 GENERĂM 5 VARIANTE DE TIP SPLIT SCREEN (50/50)
+    for i in range(5):
+        stil = "split"
+        print(f"\n🔨 Varianta {i+1}/5: POKER SPLIT SCREEN (50/50)")
         
-        # A. CALCUL TIMP
+        # A. CALCUL TIMP PENTRU CLIPUL PRINCIPAL
         start_t, durata = 0, durata_totala
-        if durata_totala > 65:
-            start_t = ((durata_totala - 60) / 5) * i + random.randint(0, 5)
+        
+        # Stabilim durata ideală a unui Short
+        if durata_totala > 65: 
             durata = 58
-        if start_t + durata > durata_totala: start_t = max(0, durata_totala - durata)
+            
+        # Logica de Start (Manual vs Automat)
+        if START_SEC.isdigit():
+            # OVERRIDE MANUAL: Începem de la secunda ta și tăiem felii consecutive!
+            start_t = int(START_SEC) + (i * durata)
+        else:
+            # MODUL AUTOMAT: Sare prin video în 5 puncte diferite
+            if durata_totala > 65:
+                start_t = ((durata_totala - 60) / 5) * i + random.randint(0, 5)
+        
+        # Sistem de siguranță: să nu depășească finalul videoclipului
+        if start_t + durata > durata_totala: 
+            start_t = max(0, durata_totala - durata)
         
         clip = clip_mare.subclip(start_t, start_t + durata)
 
-        # B. VIZUAL
+        # B. VIZUAL - 50/50 EXACT
         elemente = []
-        if stil == "split":
-            # --- CONFIGURARE PROPORȚII (AICI E SPLIT-UL) ---
-            target_top_h = int(H * 0.65)   # 65% Produs (Sus)
-            target_bot_h = H - target_top_h # 35% Gameplay (Jos)
-            
-            clip_top = resize_to_fill(clip, W, target_top_h)
+        target_top_h = int(H * 0.50)   # 50% FIX pentru Produs
+        target_bot_h = int(H * 0.50)   # 50% FIX pentru Poker
+        
+        clip_top = resize_to_fill(clip, W, target_top_h)
 
-            if os.path.exists(FOLDER_SATISFYING) and os.listdir(FOLDER_SATISFYING):
-                try:
-                    sat_path = os.path.join(FOLDER_SATISFYING, random.choice(os.listdir(FOLDER_SATISFYING)))
-                    
-                    # 🔥 MUTE COMPLET LA VIDEO-UL DE FUNDAL
-                    sat_clip = VideoFileClip(sat_path).without_audio() 
-                    
-                    if sat_clip.duration < clip.duration: sat_clip = sat_clip.loop(duration=clip.duration)
-                    else:
-                        r_start = random.uniform(0, sat_clip.duration - clip.duration)
-                        sat_clip = sat_clip.subclip(r_start, r_start + clip.duration)
-                    
-                    clip_bot = resize_to_fill(sat_clip, W, target_bot_h)
-                    clip = clips_array([[clip_top], [clip_bot]])
-                except: clip = resize_to_fill(clip, W, H)
-            else: clip = resize_to_fill(clip, W, H)
-        else:
-            if stil == "speed": clip = clip.fx(speedx, 1.3)
+        if os.path.exists(FOLDER_POKER) and os.listdir(FOLDER_POKER):
+            try:
+                poker_path = os.path.join(FOLDER_POKER, random.choice(os.listdir(FOLDER_POKER)))
+                # 🔥 POKER-UL E PE MUTE AICI:
+                poker_clip = VideoFileClip(poker_path)
+                
+                if poker_clip.duration < clip.duration: poker_clip = poker_clip.loop(duration=clip.duration)
+                else:
+                    r_start = random.uniform(0, poker_clip.duration - clip.duration)
+                    poker_clip = poker_clip.subclip(r_start, r_start + clip.duration)
+                
+                clip_bot = resize_to_fill(poker_clip, W, target_bot_h)
+                clip = clips_array([[clip_top], [clip_bot]])
+            except: clip = resize_to_fill(clip, W, H)
+        else: 
+            print("⚠️ Nu ai pus videoclipuri cu Poker în folderul assets/pokerclips!")
             clip = resize_to_fill(clip, W, H)
-            if stil == "mirror": clip = clip.fx(mirror_x)
-            if stil == "dark": clip = clip.fx(vfx.colorx, 0.8)
 
         elemente.append(clip)
 
-        # C. GRAFICĂ & FLASH
-        flash = ColorClip(size=(W, H), color=(255,255,255), duration=0.2).set_opacity(0.8)
-        elemente.append(flash)
+        # --- C. ELEMENTE GRAFICE PREMIUM (V8.5) ---
+        
+        y_baza = int(H * 0.40) # Ambele stau FIX în același loc
+        offset_text = 109      # Reglajul pentru centrarea textului în cadran
+        
+        # 1. FUNCȚIILE DE OPACITATE PURE
+        def op_pret(t):
+            return max(0.0, min(1.0, (math.cos((t - 2.0) * math.pi) + 1) / 2))
 
-        # --- FIX BARA PROGRES (AICI AM REPARAT) ---
-        bar_h = 15
+        def op_buton(t):
+            return 1.0 - op_pret(t)
+
+        # 2. BUTONUL GET LINK (Fundal 1)
+        if os.path.exists("buton_bio.png"):
+            # FĂRĂ has_mask=True, MoviePy detectează singur PNG-ul
+            btn_bio = ImageClip("buton_bio.png").resize(width=450).set_duration(clip.duration - 2.0)
+            btn_bio = btn_bio.set_position(('center', y_baza)).set_start(2.0)
+            
+            # Aplicăm opacitatea DOAR pe mască (pe transparență)
+            if btn_bio.mask is not None:
+                btn_bio.mask = btn_bio.mask.fl(lambda gf, t: gf(t) * op_buton(t))
+            elemente.append(btn_bio)
+
+        # 3. CADRUL DE PREȚ (Fundal 2)
+        if os.path.exists("forma_pret.png"):
+            img_pret = ImageClip("forma_pret.png").resize(width=450).set_duration(clip.duration - 2.0)
+            img_pret = img_pret.set_position(('center', y_baza)).set_start(2.0)
+            
+            # Aplicăm opacitatea DOAR pe mască
+            if img_pret.mask is not None:
+                img_pret.mask = img_pret.mask.fl(lambda gf, t: gf(t) * op_pret(t))
+            elemente.append(img_pret)
+
+            # 4. TEXTUL PREȚULUI (Cel mai în față)
+            p_val = pret_real if pret_real else "Check Price"
+            r_val = f"{reducere_reala} OFF! | " if reducere_reala else ""
+            txt_p = TextClip(f"{r_val}{p_val}", fontsize=35, color='white', font='TheBoldFont.ttf')
+            txt_p = txt_p.set_position(('center', y_baza + offset_text)).set_start(2.0).set_duration(clip.duration - 2.0)
+            
+            # Și textul are mască, o manipulăm la fel
+            if txt_p.mask is not None:
+                txt_p.mask = txt_p.mask.fl(lambda gf, t: gf(t) * op_pret(t))
+            elemente.append(txt_p) # Rămâne cel mai în față
+
+        # 5. TRUST BADGE
+        if os.path.exists("trust_badge.png"):
+            badge = ImageClip("trust_badge.png").resize(width=150).set_duration(clip.duration - 2.0)
+            badge = badge.set_position((W - 170, int(H * 0.05))).set_start(2.0).crossfadein(0.5)
+            elemente.append(badge)
+
+        # 6. BARA DE PROGRES
+        bar_h = 12
         p_bar = ColorClip(size=(W, bar_h), color=(255,0,0), duration=clip.duration)
-        # Folosim max(1, ...) ca să nu fie niciodată lățimea 0
-        p_bar = p_bar.resize(lambda t: (max(1, int(W * (t / clip.duration))), bar_h))
-        p_bar = p_bar.set_position(('left', 'bottom'))
+        p_bar = p_bar.resize(lambda t: (max(1, int(W * (t / clip.duration))), bar_h)).set_position(('left', 'bottom'))
         elemente.append(p_bar)
 
-        # D. TEXT NEON (VERSIUNEA ELON MUSK / HOLOGRAPHIC)
-        if stil != "split":
-          try:
-            txt_str = "LINK IN BIO 👇"
-            # Folosim un font bold. Dacă nu există, fallback pe Arial.
-            font_path = 'TheBoldFont.ttf' if os.path.exists('TheBoldFont.ttf') else 'Arial'
-            
-            # --- 1. STRATUL DE UMBRĂ ADÂNCĂ (Deep Shadow) ---
-            # Acesta dă contrastul maxim ca să se citească pe orice fundal (chiar și alb)
-            shadow = TextClip(txt_str, fontsize=80, color='black', font=font_path, 
-                              stroke_color='black', stroke_width=25, method='caption', size=(950, None))
-            
-            # --- 2. STRATUL DE ATMOSFERĂ (Magenta Glow) ---
-            # Un glow secundar mov/roz care dă efectul de "scump"
-            atmosphere = TextClip(txt_str, fontsize=80, color='#BD00FF', font=font_path, 
-                                  stroke_color='#BD00FF', stroke_width=15, method='caption', size=(950, None)).set_opacity(0.6)
-            
-            # --- 3. STRATUL PRINCIPAL NEON (Electric Cyan) ---
-            # Glow-ul principal, puternic și tăios
-            neon = TextClip(txt_str, fontsize=80, color='#00FFFF', font=font_path, 
-                            stroke_color='#00FFFF', stroke_width=8, method='caption', size=(950, None)).set_opacity(0.9)
-            
-            # --- 4. STRATUL CORE (Alb Pur) ---
-            # Textul propriu-zis, alb imaculat pentru citire
-            white = TextClip(txt_str, fontsize=80, color='white', font=font_path, method='caption', size=(950, None))
-
-            # --- POZIȚIONARE ȘI ANIMATIE "HEARTBEAT" ---
-            y_pos = 1450 # Jos, deasupra la gameplay
-            
-            # Definim funcția de puls: O bătaie rapidă și "agresivă" care cere atenție
-            # 1.0 este mărimea normală, 0.04 este intensitatea pulsului (4%), 5 este viteza
-            def pulse_anim(t):
-                return 1 + 0.04 * np.sin(6 * t)
-
-            layer_stack = [shadow, atmosphere, neon, white]
-            
-            for el in layer_stack:
-                # Aplicăm animația de resize (puls)
-                el = el.resize(pulse_anim)
-                # Setăm poziția și durata
-                el = el.set_position(('center', y_pos)).set_duration(clip.duration)
-                elemente.append(el)
-                
-          except Exception as e: 
-            print(f"⚠️ Eroare Text Premium: {e}")
-
-        # E. EXPORT
-        voce = genereaza_voce_ai(f"Check out this {TITLU_PRODUS}!")
+        # D. EXPORT
         final_video = CompositeVideoClip(elemente, size=(W,H))
         
-        if voce and os.path.exists(voce):
-            v_clip = AudioFileClip(voce).volumex(1.5)
-            # Dacă video nu are audio, punem doar vocea
-            if clip.audio:
-                final_video.audio = CompositeAudioClip([clip.audio.volumex(0.8), v_clip.set_start(0.5)])
-            else:
-                final_video.audio = v_clip.set_start(0.5)
+        # Mixăm sunetul: Reclama (sus) la 15% volum, Poker (jos) la 100% volum
+        # Asta permite spectatorului să audă acțiunea de poker fără să piardă vibe-ul reclamei
+        if clip.audio and poker_clip.audio:
+             audio_mixat = CompositeAudioClip([
+                 clip.audio.volumex(0.05),        # Reclama se aude în surdină
+                 poker_clip.audio.volumex(1.0)   # Pokerul se aude clar
+             ])
+             final_video.audio = audio_mixat
         
-        out_name = os.path.join(PATH_OUTPUT, f"short_{i}_{stil}.mp4")
+        out_name = os.path.join(PATH_OUTPUT, f"short_{i+1}_poker_split.mp4")
         print(f"⏳ [RENDER] Scriem: {out_name}")
         final_video.write_videofile(out_name, fps=30, codec='libx264', preset='ultrafast', logger=None)
         
-        if voce and os.path.exists(voce): os.remove(voce)
+        # if voce and os.path.exists(voce): os.remove(voce)
 
-        desc = f"{TITLU_PRODUS}\n\n🛒 BUY HERE:\n👉 {LINK_AFILIERE}\n\n#shorts #amazonfinds #{CONT_TARGET}"
-        adauga_in_imperiu(out_name, TITLU_PRODUS, desc, stil)
+        # --- DESCRIEREA "SEO BOMBER" PREMIUM ---
+        desc_SEO = f"""Get The {TITLU_PRODUS} Here! 🤯👇
+
+🛒 GET THE LINK:
+👉 Go to my Channel/Profile BIO!
+(🔗 linktr.ee/GadgetHunterShop)
+
+
+🌟 Why you need this gadget:
+This is one of the best Amazon finds of 2026! If you love cool tech and home hacks, this video is for you. Don't forget to subscribe for daily product hunting!
+
+🔍 Search Tags:
+#shorts #amazonfinds #gadgets #tech #musthaves #tiktokmademebuyit #giftideas #productreview #poker #pokerstars #ggpoker #{CONT_TARGET}
+
+🛑 Disclaimer:
+As an Amazon Associate, I earn from qualifying purchases. This helps support the channel!
+
+🎥 Video Credit: {LINK_SURSA}
+"""
+        # Salvăm capodopera în Baza de Date
+        adauga_in_imperiu(out_name, TITLU_PRODUS, desc_SEO, f"poker_split_{i+1}")
 
     clip_mare.close()
-    print("\n✅ GATA! Fără erori!")
+    print("\n✅ GATA! 5 Videoclipuri 50/50 Split-Screen cu MUTE pe Poker.")
 
 if __name__ == "__main__":
     main()
