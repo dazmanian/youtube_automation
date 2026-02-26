@@ -21,7 +21,7 @@ def get_video_ready():
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     # MODIFICARE: Căutăm 'pending' (așa le pune generatorul)
-    cursor.execute("SELECT * FROM videos WHERE status='pending' ORDER BY id ASC LIMIT 1")
+    cursor.execute("SELECT * FROM videos WHERE status='pending' ORDER BY RANDOM() LIMIT 1")
     video = cursor.fetchone()
     conn.close()
     return video
