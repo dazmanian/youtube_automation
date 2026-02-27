@@ -151,19 +151,46 @@ def main():
     durata_totala = clip_mare.duration
     W, H = 1080, 1920 
     
-    # 🔥 AICI ESTE MAGIA: Definim linia de producție dublă
+    # ==========================================
+    # 🗄️ BAZA DE DATE A PRODUSELOR (Combustibilul)
+    # ==========================================
+    # Aici doar adaugi produse noi când le găsești pe Amazon. Nu te atingi de restul codului!
+
+    inventar_produse = {
+     "toloco": {
+        "tags_nisa": "#massagegun #backpainrelief"
+      },
+     "air_purifier": {
+        "tags_nisa": "#airpurifier #blueair"
+      }
+    }
+    
+    # ==========================================
+    # 🕹️ PANOUL DE CONTROL (Ce producem azi?)
+    # ==========================================
+    # Asta e SINGURA linie pe care o modifici dimineața. Îi spui fabricii ce să proceseze.
+    ID_PRODUS_CURENT = "toloco"  # <--- Schimbi aici din 'toloco' în 'sleep_mask'
+
+    # Sistemul extrage automat datele produsului:
+    produs_activ = inventar_produse[ID_PRODUS_CURENT]
+    
+    
+    # ==========================================
+    # 🏭 INFRASTRUCTURA DE POSTARE (Motorul)
+    # ==========================================
+    # Definim linia de producție dublă
     platforme = [
         {
             "nume": "youtube", 
             "folder": os.path.join("assets", "pokerclips"), 
             "limita": 58,
-            "tags_specifice": "#poker #pokerstars #ggpoker"
+            "tags_specifice": f"#poker #pokerstars #ggpoker {produs_activ['tags_nisa']}"
         },
         {
             "nume": "tiktok", 
             "folder": os.path.join("assets", "tikclips"), 
             "limita": 15,
-            "tags_specifice": "#gta5 #gta6"
+            "tags_specifice": f"#gta5 #gta6 {produs_activ['tags_nisa']}"
         }
     ]
 
@@ -288,9 +315,36 @@ def main():
             final_video = CompositeVideoClip(elemente, size=(W,H))
             
             if clip.audio and 'bg_clip' in locals() and bg_clip.audio:
+                
+                # ==========================================
+                # 🧠 AI MIXER: Analizăm sunetul produsului
+                # ==========================================
+                try:
+                    # Citim amplitudinea maximă a clipului cu produsul
+                    peak_vol = clip.audio.max_volume()
+                    print(f"🔊 [AI MIXER] Amplitudine detectată: {peak_vol:.2f}")
+                except Exception as e:
+                    # Failsafe: Dacă MP4-ul e ciudat și nu se poate citi, trecem pe default
+                    peak_vol = 0.5 
+                    print("⚠️ [AI MIXER] Eroare la citire volum. Folosim valoarea de siguranță.")
+
+                # Decizia algoritmică
+                if peak_vol > 0.7:
+                    vol_produs = 0.10  # Prea zgomotos -> îl reducem drastic
+                    print("📉 Reducem zgomotul puternic la 10%.")
+                elif peak_vol > 0.1:
+                    vol_produs = 0.30  # Sunet bun/ASMR -> îl lăsăm să se audă percuția
+                    print("⚖️ Sunet ASMR detectat. Setăm la 30%.")
+                else:
+                    vol_produs = 0.0   # Mut -> îl tăiem de tot
+                    print("🔇 Clip mut. Tăiem complet sunetul.")
+
+                # ==========================================
+                # 🎛️ MIXAJUL FINAL
+                # ==========================================
                 audio_mixat = CompositeAudioClip([
-                    clip.audio.volumex(0.05),        
-                    bg_clip.audio.volumex(1.0) # Se aplică la fel și pt Poker și pt GTA
+                    clip.audio.volumex(vol_produs),        
+                    bg_clip.audio.volumex(0.85) # Redus de la 1.0 pentru a preveni distorsiunea (clipping)
                 ])
                 final_video.audio = audio_mixat
             
@@ -312,7 +366,7 @@ def main():
 This is one of the best Amazon finds of 2026! If you love cool tech and home hacks, this video is for you. Don't forget to subscribe for daily product hunting!
 
 🔍 Search Tags:
-#shorts #amazonfinds #gadgets #tech #musthaves #tiktokmademebuyit #giftideas #productreview {config['tags_specifice']} #{CONT_TARGET}
+#shorts #amazonfinds #amazonmusthaves #amazonusa #usa {config['tags_specifice']} #{CONT_TARGET}
 
 🛑 Disclaimer:
 As an Amazon Associate, I earn from qualifying purchases. This helps support the channel!
