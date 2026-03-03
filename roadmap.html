@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube Empire — Roadmap</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --black: #080808;
+    --dark: #0f0f0f;
+    --card: #141414;
+    --border: #1e1e1e;
+    --gold: #f5c842;
+    --gold2: #e8a020;
+    --red: #ff3b3b;
+    --green: #00e676;
+    --white: #f0f0f0;
+    --muted: #555;
+    --text: #aaa;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--black);
+    color: var(--white);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* NOISE TEXTURE OVERLAY */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 60px 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* HEADER */
+  .header {
+    text-align: center;
+    margin-bottom: 80px;
+    animation: fadeDown 0.8s ease both;
+  }
+
+  .header-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .header h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(64px, 10vw, 120px);
+    line-height: 0.9;
+    letter-spacing: 2px;
+    background: linear-gradient(135deg, #fff 0%, var(--gold) 50%, var(--gold2) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .header-sub {
+    margin-top: 20px;
+    font-size: 15px;
+    color: var(--text);
+    font-weight: 300;
+    letter-spacing: 1px;
+  }
+
+  /* CURRENT STATS */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 60px;
+    animation: fadeUp 0.8s 0.2s ease both;
+  }
+
+  .stat-item {
+    background: var(--card);
+    padding: 28px 24px;
+    text-align: center;
+    transition: background 0.2s;
+  }
+
+  .stat-item:hover { background: #1a1a1a; }
+
+  .stat-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .stat-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 36px;
+    letter-spacing: 1px;
+    color: var(--gold);
+  }
+
+  .stat-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* ROADMAP PHASES */
+  .section-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 13px;
+    letter-spacing: 5px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 28px;
+  }
+
+  .phases {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 60px;
+    animation: fadeUp 0.8s 0.3s ease both;
+  }
+
+  .phase {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px 32px;
+    display: grid;
+    grid-template-columns: 140px 1fr auto;
+    align-items: center;
+    gap: 32px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .phase::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--border);
+    transition: background 0.25s;
+  }
+
+  .phase:hover { 
+    border-color: #2a2a2a;
+    background: #161616;
+    transform: translateX(4px);
+  }
+
+  .phase.active::before { background: var(--gold); }
+  .phase.completed::before { background: var(--green); }
+  .phase.upcoming::before { background: var(--border); }
+
+  .phase-period {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  .phase-period strong {
+    display: block;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 1px;
+    color: var(--white);
+    margin-bottom: 2px;
+  }
+
+  .phase-content h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--white);
+    margin-bottom: 8px;
+  }
+
+  .phase-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 100px;
+    letter-spacing: 0.5px;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .tag.gold { border-color: var(--gold); color: var(--gold); }
+  .tag.green { border-color: var(--green); color: var(--green); }
+  .tag.red { border-color: var(--red); color: var(--red); }
+
+  .phase-money {
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .money-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .money-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    letter-spacing: 1px;
+  }
+
+  .money-value.low { color: var(--text); }
+  .money-value.mid { color: var(--gold); }
+  .money-value.high { color: var(--green); }
+
+  /* GOAL TRACKER */
+  .goal-section {
+    animation: fadeUp 0.8s 0.4s ease both;
+    margin-bottom: 60px;
+  }
+
+  .goals-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  .goal-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 24px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.25s;
+  }
+
+  .goal-card:hover {
+    border-color: #2a2a2a;
+    transform: translateY(-2px);
+  }
+
+  .goal-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--gold), var(--gold2));
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.4s ease;
+  }
+
+  .goal-card:hover::after { transform: scaleX(1); }
+
+  .goal-icon {
+    font-size: 28px;
+    margin-bottom: 16px;
+  }
+
+  .goal-amount {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 48px;
+    letter-spacing: 1px;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .goal-amount.g1 { color: var(--text); }
+  .goal-amount.g2 { color: var(--gold); }
+  .goal-amount.g3 { 
+    background: linear-gradient(135deg, var(--gold), var(--green));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .goal-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--white);
+    margin-bottom: 6px;
+  }
+
+  .goal-desc {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .goal-progress {
+    margin-top: 20px;
+  }
+
+  .progress-bar-bg {
+    height: 3px;
+    background: var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    border-radius: 10px;
+    background: linear-gradient(90deg, var(--gold), var(--gold2));
+    transition: width 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .progress-text {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 8px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* SCALE TACTICS */
+  .tactics-section {
+    animation: fadeUp 0.8s 0.5s ease both;
+    margin-bottom: 60px;
+  }
+
+  .tactics-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .tactic-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    transition: all 0.2s;
+  }
+
+  .tactic-card:hover {
+    border-color: #252525;
+    background: #161616;
+  }
+
+  .tactic-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 40px;
+    color: var(--border);
+    line-height: 1;
+    flex-shrink: 0;
+    transition: color 0.2s;
+  }
+
+  .tactic-card:hover .tactic-num { color: var(--gold); }
+
+  .tactic-body h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--white);
+    margin-bottom: 6px;
+  }
+
+  .tactic-body p {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  .tactic-impact {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--gold);
+    margin-top: 8px;
+    letter-spacing: 1px;
+  }
+
+  /* FOOTER */
+  .footer {
+    text-align: center;
+    padding-top: 40px;
+    border-top: 1px solid var(--border);
+    animation: fadeUp 0.8s 0.6s ease both;
+  }
+
+  .footer-quote {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(24px, 5vw, 48px);
+    letter-spacing: 2px;
+    background: linear-gradient(135deg, var(--muted), var(--white));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 12px;
+  }
+
+  .footer-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+  }
+
+  /* ANIMATIONS */
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    .stats-bar { grid-template-columns: repeat(2, 1fr); }
+    .phase { grid-template-columns: 1fr; gap: 16px; }
+    .phase-money { text-align: left; }
+    .goals-grid { grid-template-columns: 1fr; }
+    .tactics-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-label">⚡ Plan de creștere</div>
+    <h1>YOUTUBE<br>EMPIRE</h1>
+    <div class="header-sub">Roadmap 2026 — Affiliate + AdSense Scale Strategy</div>
+  </div>
+
+  <!-- CURRENT STATS -->
+  <div class="stats-bar">
+    <div class="stat-item">
+      <div class="stat-label">Views totale</div>
+      <div class="stat-value">5,364</div>
+      <div class="stat-sub">primele clipuri</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">CTR Mediu</div>
+      <div class="stat-value">4.8%</div>
+      <div class="stat-sub">peste media YT</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Best CTR</div>
+      <div class="stat-value">22.7%</div>
+      <div class="stat-sub">Air Purifier clip</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Clipuri / zi</div>
+      <div class="stat-value">2</div>
+      <div class="stat-sub">auto-upload activ</div>
+    </div>
+  </div>
+
+  <!-- ROADMAP PHASES -->
+  <div class="section-title">// Fazele de creștere</div>
+  <div class="phases">
+
+    <div class="phase active">
+      <div class="phase-period">
+        <strong>FAZA 1</strong>
+        Luna 1–2
+      </div>
+      <div class="phase-content">
+        <h3>Fundația — Testare & Optimizare</h3>
+        <div class="phase-tags">
+          <span class="tag gold">2 clipuri/zi</span>
+          <span class="tag gold">5 produse</span>
+          <span class="tag gold">Linktr.ee optimizat</span>
+          <span class="tag">CTR tracking</span>
+          <span class="tag">Hook testing</span>
+        </div>
+      </div>
+      <div class="phase-money">
+        <div class="money-label">Target lunar</div>
+        <div class="money-value low">$20–80</div>
+      </div>
+    </div>
+
+    <div class="phase upcoming">
+      <div class="phase-period">
+        <strong>FAZA 2</strong>
+        Luna 3–4
+      </div>
+      <div class="phase-content">
+        <h3>Accelerare — Al 2-lea Canal + TikTok Shop</h3>
+        <div class="phase-tags">
+          <span class="tag">2 canale YT</span>
+          <span class="tag">TikTok Shop activ</span>
+          <span class="tag">10 produse</span>
+          <span class="tag">4 clipuri/zi total</span>
+        </div>
+      </div>
+      <div class="phase-money">
+        <div class="money-label">Target lunar</div>
+        <div class="money-value mid">$150–400</div>
+      </div>
+    </div>
+
+    <div class="phase upcoming">
+      <div class="phase-period">
+        <strong>FAZA 3</strong>
+        Luna 5–6
+      </div>
+      <div class="phase-content">
+        <h3>Scale — 3 Canale + YPP Monetizare</h3>
+        <div class="phase-tags">
+          <span class="tag">3 canale YT</span>
+          <span class="tag">YPP aplicat</span>
+          <span class="tag">AdSense activ</span>
+          <span class="tag">6 clipuri/zi total</span>
+          <span class="tag">Produse $50–150</span>
+        </div>
+      </div>
+      <div class="phase-money">
+        <div class="money-label">Target lunar</div>
+        <div class="money-value mid">$400–900</div>
+      </div>
+    </div>
+
+    <div class="phase upcoming">
+      <div class="phase-period">
+        <strong>FAZA 4</strong>
+        Luna 7–12
+      </div>
+      <div class="phase-content">
+        <h3>Empire Mode — Full Automation</h3>
+        <div class="phase-tags">
+          <span class="tag green">VPS 24/7</span>
+          <span class="tag green">5+ canale</span>
+          <span class="tag green">Email list</span>
+          <span class="tag green">10+ clipuri/zi</span>
+          <span class="tag green">High-ticket products</span>
+        </div>
+      </div>
+      <div class="phase-money">
+        <div class="money-label">Target lunar</div>
+        <div class="money-value high">$1K–3K+</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- GOAL TRACKER -->
+  <div class="goal-section">
+    <div class="section-title">// Goaluri financiare</div>
+    <div class="goals-grid">
+
+      <div class="goal-card">
+        <div class="goal-icon">🎯</div>
+        <div class="goal-amount g1">$100</div>
+        <div class="goal-title">Prima sută</div>
+        <div class="goal-desc">Prima lună cu venit real. Validarea că sistemul funcționează end-to-end.</div>
+        <div class="goal-progress">
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" style="width: 15%"></div>
+          </div>
+          <div class="progress-text">
+            <span>~$15 estimat acum</span>
+            <span>15%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="goal-card">
+        <div class="goal-icon">🚀</div>
+        <div class="goal-amount g2">$500</div>
+        <div class="goal-title">500 pe lună</div>
+        <div class="goal-desc">2 canale active, TikTok Shop integrat, 10+ produse în rotație.</div>
+        <div class="goal-progress">
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" style="width: 3%"></div>
+          </div>
+          <div class="progress-text">
+            <span>Faza 2–3</span>
+            <span>3%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="goal-card">
+        <div class="goal-icon">👑</div>
+        <div class="goal-amount g3">$2,000</div>
+        <div class="goal-title">Empire Mode</div>
+        <div class="goal-desc">5+ canale, VPS 24/7, produse high-ticket, full automation fără input manual.</div>
+        <div class="goal-progress">
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" style="width: 1%"></div>
+          </div>
+          <div class="progress-text">
+            <span>Faza 4 — Luna 9+</span>
+            <span>1%</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SCALE TACTICS -->
+  <div class="tactics-section">
+    <div class="section-title">// Cum scalăm vizionările</div>
+    <div class="tactics-grid">
+
+      <div class="tactic-card">
+        <div class="tactic-num">01</div>
+        <div class="tactic-body">
+          <h4>Replică formula CTR 22.7%</h4>
+          <p>Clipul "Best Air Purifier On Market" a bătut toate celelalte. Analizează titlul, thumbnailul și hook-ul primelor 2 secunde — replică exact formula pentru fiecare produs nou.</p>
+          <div class="tactic-impact">↑ IMPACT: 3–5x mai mult reach organic</div>
+        </div>
+      </div>
+
+      <div class="tactic-card">
+        <div class="tactic-num">02</div>
+        <div class="tactic-body">
+          <h4>Hook în primele 2 secunde</h4>
+          <p>YouTube măsoară retenția din secunda 1. Adaugă text overlay agresiv la început: "Wait for it..." sau "This costs $X on Amazon 🤯" — oprește scroll-ul înainte ca produsul să apară.</p>
+          <div class="tactic-impact">↑ IMPACT: +40% watch time mediu</div>
+        </div>
+      </div>
+
+      <div class="tactic-card">
+        <div class="tactic-num">03</div>
+        <div class="tactic-body">
+          <h4>Produse cu WOW factor vizual</h4>
+          <p>Ruler-ul laser, gadget-urile care se transformă sau fac ceva surprinzător convertesc mult mai bine decât produse statice. Algoritmul Shorts recompensează rewatch-urile.</p>
+          <div class="tactic-impact">↑ IMPACT: +60% rewatch rate</div>
+        </div>
+      </div>
+
+      <div class="tactic-card">
+        <div class="tactic-num">04</div>
+        <div class="tactic-body">
+          <h4>Postează la ore cu trafic maxim</h4>
+          <p>Intervalele 15:00–17:00 și 00:00–02:00 sunt deja setate corect. Pe măsură ce canalul crește, analizează în YouTube Analytics ce oră aduce cele mai multe views și ajustezi.</p>
+          <div class="tactic-impact">↑ IMPACT: +25% views în prima oră</div>
+        </div>
+      </div>
+
+      <div class="tactic-card">
+        <div class="tactic-num">05</div>
+        <div class="tactic-body">
+          <h4>Al 2-lea canal — nișă diferită</h4>
+          <p>Același cod, același sistem. O nișă nouă (Home Decor, Kitchen, Fitness) înseamnă un public diferit și dublu potențial de views fără muncă extra în afară de descărcatul videoului sursă.</p>
+          <div class="tactic-impact">↑ IMPACT: 2x volumul total</div>
+        </div>
+      </div>
+
+      <div class="tactic-card">
+        <div class="tactic-num">06</div>
+        <div class="tactic-body">
+          <h4>TikTok Shop — conversie directă</h4>
+          <p>TikTok permite link direct în video, fără bio, fără linktr.ee. Conversia e de 3–5x față de YouTube pentru că e un singur tap. Sistemul tău generează deja clipuri TikTok gata de folosit.</p>
+          <div class="tactic-impact">↑ IMPACT: 3–5x rata de conversie</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="footer-quote">VOLUMUL BATE PERFECȚIUNEA</div>
+    <div class="footer-sub">// 2 clipuri azi → 2000 clipuri în 3 ani → empire</div>
+  </div>
+
+</div>
+
+<script>
+  // Animate progress bars on load
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      document.querySelectorAll('.progress-bar-fill').forEach(bar => {
+        const width = bar.style.width;
+        bar.style.width = '0%';
+        setTimeout(() => { bar.style.width = width; }, 100);
+      });
+    }, 500);
+  });
+</script>
+</body>
+</html>

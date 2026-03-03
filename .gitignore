@@ -6,3 +6,7 @@ ffmpeg.exe
 ffprobe.exe
 *.exe
 chrome_profiles/
+credentials.json
+token.pickle
+*.log
+youtube_empire.db

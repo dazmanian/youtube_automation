@@ -15,11 +15,12 @@ def main_menu():
     while True:
         banner()
         print("\n🎛️  PANOU DE CONTROL:")
-        print("1. 📥 [DOWNLOADER]: Descarcă video brut")
-        print("2. 🏭 [GENERATOR]:  Crează 5 variante (50/50 Poker Split)")
-        print("3. 🚀 [UPLOADER]:   Postează pe YouTube")
-        print("4. 📊 [DATABASE]:   Vezi Statistici & Coada")
-        print("5. ❌ Ieșire")
+        print("1. 📥 [DOWNLOADER]:  Descarcă video brut")
+        print("2. 🏭 [GENERATOR]:   Crează 5 variante (50/50 Poker Split)")
+        print("3. 🚀 [UPLOADER]:    Postează automat (Scheduler API)")
+        print("4. 🔧 [BACKUP]:      Upload Manual (Selenium)")
+        print("5. 📊 [DATABASE]:    Vezi Statistici & Coada")
+        print("6. ❌ Ieșire")
         
         choice = input("\nComanda ta > ")
         
@@ -34,18 +35,25 @@ def main_menu():
             input("\n✅ Apasă Enter să revii la meniu...")
             
         elif choice == "3":
-            print("\n🌍 Pornesc Distribuția (Upload)...")
-            # Atenționare pentru Chrome
-            print("⚠️ ATENȚIE: Închide toate ferestrele Chrome înainte să continui!")
+            print("\n🚀 Pornesc Uploader cu Scheduler...")
+            print("⚠️ Scriptul va rula continuu și va posta la orele programate!")
+            print("   15:00-17:00 și 00:00-02:00 (România)")
+            input("Apasă Enter să continui...")
+            os.system("python uploader.py")
+            input("\n✅ Apasă Enter să revii la meniu...")
+            
+        elif choice == "4":
+            print("\n🔧 Pornesc Upload Manual (Selenium - Backup)...")
+            print("⚠️ ATENȚIE: Închide toate ferestrele Chrome înainte!")
             input("Apasă Enter dacă ai închis Chrome...")
             os.system("python upload_selenium.py")
             input("\n✅ Apasă Enter să revii la meniu...")
 
-        elif choice == "4":
+        elif choice == "5":
             os.system("python database.py")
             input("\n✅ Apasă Enter să revii la meniu...")
             
-        elif choice == "5":
+        elif choice == "6":
             print("Succes, CEO! 👋")
             break
         else:

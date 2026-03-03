@@ -7,14 +7,260 @@ import asyncio
 import edge_tts
 import math
 import time
+import logging
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from datetime import datetime, timedelta
 from moviepy.editor import VideoFileClip, CompositeVideoClip, TextClip, vfx, ColorClip, clips_array, AudioFileClip, CompositeAudioClip, ImageClip
 from moviepy.video.fx.all import gamma_corr, lum_contrast, mirror_x, speedx, fadein, fadeout
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler("engine.log"),
+        logging.StreamHandler()
+    ]
+)
+
+# ============================================================
+# 🔄 POOL DE USER AGENTS — Rotație automată la fiecare call
+# ============================================================
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
+]
+
+# ============================================================
+# 💾 CACHE DB — Evităm request-uri inutile (6 ore TTL)
+# ============================================================
+DB_NAME = "youtube_empire.db"
+CACHE_TTL_ORE = 6
+
+def init_cache_db():
+    """Creează tabela de cache dacă nu există."""
+    conn = sqlite3.connect(DB_NAME)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pret_cache (
+            url TEXT PRIMARY KEY,
+            pret TEXT,
+            reducere TEXT,
+            timestamp REAL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def get_din_cache(url_amazon):
+    """Returnează (pret, reducere) din cache dacă e fresh, altfel None."""
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        row = conn.execute(
+            "SELECT pret, reducere FROM pret_cache WHERE url=? AND timestamp > ?",
+            (url_amazon, time.time() - CACHE_TTL_ORE * 3600)
+        ).fetchone()
+        conn.close()
+        if row:
+            logging.info(f"💾 [CACHE HIT]: Preț din cache: {row[0]}")
+            return row[0], row[1]
+        return None, None
+    except Exception as e:
+        logging.warning(f"⚠️ [CACHE READ ERROR]: {e}")
+        return None, None
+
+def salveaza_in_cache(url_amazon, pret, reducere):
+    """Salvează prețul în cache cu timestamp curent."""
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        conn.execute(
+            "INSERT OR REPLACE INTO pret_cache (url, pret, reducere, timestamp) VALUES (?,?,?,?)",
+            (url_amazon, pret, reducere, time.time())
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logging.warning(f"⚠️ [CACHE WRITE ERROR]: {e}")
+
+# ============================================================
+# 🛡️ STEALTH OPTIONS — Configurare Chrome anti-detectie
+# ============================================================
+def build_driver():
+    """Construiește un driver Chrome cu setări stealth."""
+    options = Options()
+    options.add_argument("--headless=new")           # Noul headless (Chrome 112+), mai greu de detectat
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--lang=en-US")
+    options.add_argument(f"--user-agent={random.choice(USER_AGENTS)}")   # 🔄 Rotație
+
+    # Eliminăm semnăturile de automation
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option("useAutomationExtension", False)
+
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=options)
+
+    # Patch JS: ascunde navigator.webdriver (detectat de Amazon)
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+        "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+    })
+
+    return driver
+
+# ============================================================
+# 🔍 EXTRACTOR PREȚ — Cu fallback pe mai multe selectori
+# ============================================================
+PRICE_SELECTORS = [
+    # Selector 1: Standard (cel mai comun)
+    (By.CLASS_NAME, "a-price-whole"),
+    # Selector 2: Oferte fulger / Subscribe & Save
+    (By.CSS_SELECTOR, "#priceblock_ourprice"),
+    (By.CSS_SELECTOR, "#priceblock_dealprice"),
+    # Selector 3: Layout nou Amazon (2024+)
+    (By.CSS_SELECTOR, "span.a-offscreen"),
+    # Selector 4: Clasa generică de preț
+    (By.CSS_SELECTOR, ".a-price .a-offscreen"),
+]
+
+def extrage_pret_din_pagina(driver):
+    """
+    Încearcă toți selectorii în ordine.
+    Returnează (pret_str, reducere_str) sau ("Check Price", None).
+    """
+    pret_final = "Check Price"
+    reducere = None
+
+    # --- Încearcă metoda principală (whole + fraction) ---
+    try:
+        # Așteptăm explicit elementul în loc de sleep fix
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "a-price-whole"))
+        )
+        pret_raw = driver.find_element(By.CLASS_NAME, "a-price-whole").text
+        zecimale_raw = driver.find_element(By.CLASS_NAME, "a-price-fraction").text
+
+        pret_curat = "".join(filter(str.isdigit, pret_raw))
+        zecimale_curat = "".join(filter(str.isdigit, zecimale_raw))
+
+        if pret_curat:
+            pret_final = f"${pret_curat}.{zecimale_curat}"
+            logging.info(f"✅ Selector primar OK: {pret_final}")
+            # Nu returnăm încă — mai extragem și reducerea
+    except Exception:
+        logging.info("⏭️ Selector primar eșuat, încerc fallback-uri...")
+
+    # --- Fallback dacă metoda principală a eșuat ---
+    if pret_final == "Check Price":
+        for by, selector in PRICE_SELECTORS[1:]:
+            try:
+                elem = driver.find_element(by, selector)
+                text = elem.get_attribute("textContent") or elem.text
+                text = text.strip()
+                if text and "$" in text:
+                    pret_final = text.split("\n")[0].strip()
+                    logging.info(f"✅ Fallback selector '{selector}' OK: {pret_final}")
+                    break
+            except Exception:
+                continue
+
+    # --- Extracție reducere ---
+    reducere_selectors = [
+        (By.CLASS_NAME, "savingsPercentage"),
+        (By.CSS_SELECTOR, "#savingsPercentage"),
+        (By.CSS_SELECTOR, ".a-color-price.a-size-base.a-text-bold"),
+    ]
+    for by, selector in reducere_selectors:
+        try:
+            reducere_text = driver.find_element(by, selector).text
+            reducere = reducere_text.replace("-", "").replace("%", "").strip() + "%"
+            logging.info(f"🏷️ Reducere găsită: {reducere}")
+            break
+        except Exception:
+            continue
+
+    return pret_final, reducere
+
+# ============================================================
+# 🚀 FUNCȚIA PRINCIPALĂ — Cu cache + retry + cleanup garantat
+# ============================================================
+def extrage_pret_amazon(url_amazon, retry=2):
+    """
+    Extrage prețul de pe Amazon cu:
+    - Cache de 6 ore (evită request-uri inutile)
+    - User-agent rotation (evită blocarea)
+    - WebDriverWait în loc de sleep fix
+    - Fallback pe mai mulți selectori
+    - Retry automat la eșec
+    - Cleanup garantat al driver-ului
+    """
+    logging.info(f"🔍 [SCRAPER]: Start pentru URL: {url_amazon[:60]}...")
+
+    # 1. Verificăm cache-ul mai întâi
+    init_cache_db()
+    pret_cache, reducere_cache = get_din_cache(url_amazon)
+    if pret_cache:
+        return pret_cache, reducere_cache
+
+    # 2. Scraping cu retry
+    for attempt in range(1, retry + 1):
+        driver = None
+        try:
+            logging.info(f"🌐 [Attempt {attempt}/{retry}]: Deschidem Chrome...")
+            driver = build_driver()
+
+            # Setăm cookies de regiune ÎNAINTE de a merge pe produs
+            driver.get("https://www.amazon.com/?language=en_US")
+            driver.add_cookie({"name": "i18n-prefs", "value": "USD", "domain": ".amazon.com"})
+            driver.add_cookie({"name": "lc-main",    "value": "en_US", "domain": ".amazon.com"})
+
+            # Construim URL-ul final
+            separator = "&" if "?" in url_amazon else "?"
+            url_final = f"{url_amazon}{separator}language=en_US&currency=USD"
+            driver.get(url_final)
+
+            # Delay random — comportament uman, nu robotic
+            time.sleep(random.uniform(3.0, 6.5))
+
+            # Verificăm dacă Amazon ne-a dat CAPTCHA
+            if "robot" in driver.title.lower() or "captcha" in driver.page_source.lower():
+                logging.warning(f"🤖 [CAPTCHA DETECTAT] la attempt {attempt}!")
+                time.sleep(random.uniform(10, 20))  # Așteptăm mai mult înainte de retry
+                continue
+
+            pret, reducere = extrage_pret_din_pagina(driver)
+
+            # 3. Salvăm în cache și returnăm
+            salveaza_in_cache(url_amazon, pret, reducere)
+            logging.info(f"💰 [SUCCES]: {pret} | Reducere: {reducere or 'N/A'}")
+            return pret, reducere
+
+        except Exception as e:
+            logging.error(f"⚠️ [SCRAPER EROARE] Attempt {attempt}: {e}")
+            if attempt == retry:
+                return "Check Price", None
+            time.sleep(random.uniform(5, 12))  # Pauză între retry-uri
+
+        finally:
+            # ✅ CLEANUP GARANTAT — se execută mereu, indiferent de eroare
+            if driver is not None:
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
+
+    return "Check Price", None
 
 # --- 1. CONFIGURARE IMAGEMAGICK ---
 from moviepy.config import change_settings
@@ -22,8 +268,7 @@ change_settings({"IMAGEMAGICK_BINARY": r"C:\Program Files\ImageMagick-7.1.2-Q16-
 
 # --- CONFIGURARE GENERALĂ ---
 PATH_OUTPUT = "output_videos"
-VIDEO_SURSA = "video_brut.mp4"
-DB_NAME = "youtube_empire.db"
+VIDEO_SURSA = input("6. Fișier video sursă (ex: ninja_brut.mp4): ").strip() or "video_brut.mp4"
 
 # --- INPUT INTERACTIV ---
 print("\n💎 --- GENERATOR V8.0 (POKER SPLIT EXCLUSIVE | DUAL FACTORY: YT + TIKTOK) ---")
@@ -45,7 +290,8 @@ def resize_to_fill(clip, target_w, target_h):
     try:
         clip_resized = clip.resize(final_scale)
         return clip_resized.crop(x_center=clip_resized.w/2, y_center=clip_resized.h/2, width=target_w, height=target_h)
-    except:
+    except (ValueError, AttributeError) as e:
+        print(f"⚠️ resize_to_fill error: {e}")
         return clip.resize((target_w, target_h))
 
 async def _genereaza_voce_async(text, nume_fisier):
@@ -63,66 +309,6 @@ def genereaza_voce_ai(text):
         print(f"⚠️ [VOCE EROARE]: {e}")
         return None
 
-def extrage_pret_amazon(url_amazon):
-    print(f"🔍 [SCRAPER]: Verific prețul pe Amazon...")
-    options = Options()
-    options.add_argument("--headless")  # Nu deschide fereastra Chrome
-    options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--lang=en-US")
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-
-    try:
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options)
-        
-        # Pasul 1: Mergem pe Amazon US direct pentru a seta un cookie de regiune
-        driver.get("https://www.amazon.com/?language=en_US&currency=USD")
-        driver.add_cookie({"name": "i18n-prefs", "value": "USD", "domain": ".amazon.com"})
-        driver.add_cookie({"name": "lc-main", "value": "en_US", "domain": ".amazon.com"})
-        
-        # Pasul 2: Mergem la produsul tău
-        separator = "&" if "?" in url_amazon else "?"
-        url_final = f"{url_amazon}{separator}language=en_US&currency=USD"
-        
-        driver.get(url_final)
-        time.sleep(5) # Lăsăm timp pentru redirectările de monedă
-
-        # Pasul 3: Extracție cu verificare
-        try:
-            # Luăm partea întreagă
-            pret_raw = driver.find_element(By.CLASS_NAME, "a-price-whole").text
-            # Luăm zecimalele
-            zecimale_raw = driver.find_element(By.CLASS_NAME, "a-price-fraction").text
-            
-            # Curățăm orice caracter non-numeric (scot puncte/virgule de RO)
-            pret_curat = "".join(filter(str.isdigit, pret_raw))
-            zecimale_curat = "".join(filter(str.isdigit, zecimale_raw))
-
-            if not pret_curat:
-                # Uneori prețul e în altă clasă dacă e ofertă fulger
-                pret_alt = driver.find_element(By.ID, "priceblock_ourprice").text
-                pret_final = pret_alt
-            else:
-                pret_final = f"${pret_curat}.{zecimale_curat}"
-        except:
-            pret_final = "Check Price"
-
-        # Extracție Reducere
-        reducere = None
-        try:
-            reducere = driver.find_element(By.CLASS_NAME, "savingsPercentage").text.replace('-', '').strip()
-        except:
-            pass
-
-        print(f"💰 [SUCCES]: Preț final setat: {pret_final} ({reducere if reducere else 'No Disc'})")
-        return pret_final, reducere
-
-    except Exception as e:
-        print(f"⚠️ [SCRAPER EROARE]: {e}")
-        return "Check Price", None
-    finally:
-        driver.quit()
 def adauga_in_imperiu(cale, titlu, descriere, stil):
     try:
         conn = sqlite3.connect(DB_NAME)
@@ -133,6 +319,12 @@ def adauga_in_imperiu(cale, titlu, descriere, stil):
         conn.commit()
         conn.close()
     except Exception as e: print(f"⚠️ DB Error: {e}")
+    
+def op_pret(t):
+    return max(0.0, min(1.0, (math.cos((t - 6.0) * math.pi) + 1) / 2))
+
+def op_buton(t):
+    return 1.0 - op_pret(t)
 
 # --- 4. ENGINE PRINCIPAL ---
 def main():
@@ -158,10 +350,24 @@ def main():
 
     inventar_produse = {
      "toloco": {
-        "tags_nisa": "#massagegun #backpainrelief"
+        "tags_nisa": "#massagegun #backpainrelief",
+        "hook": "I cancelled my $200 massage appointment 💀"
       },
      "air_purifier": {
-        "tags_nisa": "#airpurifier #blueair"
+        "tags_nisa": "#airpurifier #blueair",
+        "hook": "I was breathing POISON at home 😮"
+      },
+     "ninja_airfryer": {
+         "tags_nisa": "#airfryer #ninja #cooking",
+         "hook": "My oven has been OFF for 3 months 🔥"
+      },
+     "wyze_scale": {
+         "tags_nisa": "#smartscale #fitness #weightloss",
+         "hook": "My scale was LYING to me for years 🤯"
+      },
+     "hozo_ruler": {
+         "tags_nisa": "#gadgets #diytool #cooltech",
+         "hook": "Nobody uses a tape measure anymore... 📏"
       }
     }
     
@@ -169,7 +375,7 @@ def main():
     # 🕹️ PANOUL DE CONTROL (Ce producem azi?)
     # ==========================================
     # Asta e SINGURA linie pe care o modifici dimineața. Îi spui fabricii ce să proceseze.
-    ID_PRODUS_CURENT = "toloco"  # <--- Schimbi aici din 'toloco' în 'sleep_mask'
+    ID_PRODUS_CURENT = "ninja_airfryer"  # <--- Schimbi aici din 'toloco' în 'sleep_mask'
 
     # Sistemul extrage automat datele produsului:
     produs_activ = inventar_produse[ID_PRODUS_CURENT]
@@ -183,7 +389,7 @@ def main():
         {
             "nume": "youtube", 
             "folder": os.path.join("assets", "pokerclips"), 
-            "limita": 58,
+            "limita": 28, ## ← SCHIMBI din 58 în 28
             "tags_specifice": f"#poker #pokerstars #ggpoker {produs_activ['tags_nisa']}"
         },
         {
@@ -206,7 +412,14 @@ def main():
 
         # LOOP 2: Generăm cele 5 variante pentru platforma curentă
         for i in range(5):
+            
             print(f"\n🔨 Varianta {i+1}/5: {nume_plat.upper()} SPLIT SCREEN (50/50)")
+            
+            bg_clip = None
+            clip_bot = None
+            sfx_whoosh = None
+            sfx_pop = None
+            clip_final_split = None
             
             # A. CALCUL TIMP (Adaptat la platformă)
             start_t = 0
@@ -254,23 +467,83 @@ def main():
                 clip_final_split = resize_to_fill(clip, W, H)
 
             elemente.append(clip_final_split)
+            
+            # ✅ HOOK TEXT PREMIUM — primele 2.5 secunde
+            if os.path.exists("TheBoldFont.ttf"):
+    
+                # Fundal pentru HOOK 1
+                hook_bg = ColorClip(size=(W, 90), color=(0, 0, 0))
+                hook_bg = (hook_bg
+                           .set_opacity(0.55)
+                           .set_position(('left', int(H * 0.06)))
+                           .set_start(0)
+                           .set_duration(2.5))
+                elemente.append(hook_bg)
+                
+                # Fundal pentru HOOK 2
+                hook_bg2 = ColorClip(size=(W, 90), color=(0, 0, 0))
+                hook_bg2 = (hook_bg2
+                            .set_opacity(0.55)
+                            .set_position(('left', int(H * 0.06)))
+                            .set_start(2.5)
+                            .set_duration(1.5))
+                elemente.append(hook_bg2)
+    
+                # Textul hook-ului
+                hook_text = TextClip(produs_activ['hook'], fontsize=48, color='#FFD700', 
+                         font='TheBoldFont.ttf', stroke_color='black', stroke_width=2)
+    
+                # HOOK 1 — apare la secunda 0, dispare la 2.5
+                hook_text = (hook_text
+                             .set_position(('center', int(H * 0.07)))
+                             .set_start(0)
+                             .set_duration(2.5)
+                             .fadein(0.3)
+                             .fadeout(0.2))
+                elemente.append(hook_text)
+            
+                # HOOK 2 — "Double Take" — apare la 2.5, creează bridge spre produs
+                hook2_text = TextClip("Here's why... 👇", fontsize=40, color='white',
+                                      font='TheBoldFont.ttf', stroke_color='black', stroke_width=2)
+                hook2_text = (hook2_text
+                              .set_position(('center', int(H * 0.07)))
+                              .set_start(2.5).set_duration(1.5)
+                              .fadein(0.2).fadeout(0.2))
+                elemente.append(hook2_text)
 
             # --- C. ELEMENTE GRAFICE PREMIUM (V8.5) ---
         
-            y_baza = int(H * 0.40) # Ambele stau FIX în același loc
-            offset_text = 109      # Reglajul pentru centrarea textului în cadran
-        
-            # 1. FUNCȚIILE DE OPACITATE PURE
-            def op_pret(t):
-                return max(0.0, min(1.0, (math.cos((t - 6.0) * math.pi) + 1) / 2))
+            y_baza = int(H * 0.35) # Ambele stau FIX în același loc
+            offset_text = 182      # Reglajul pentru centrarea textului în cadran
+            
+            # 2. TRUST BADGE DINAMIC (Sertarul care sare din spate)
+            # Îl adăugăm PRIMUL în listă, ca să fie pe stratul din spate!
+            if os.path.exists("stelute_dinamice.png"):
+                stelute_base = ImageClip("stelute_dinamice.png").resize(width=380)
+                h_stelute = stelute_base.h
+                
+                t_start = 6.0
+                t_durata = 0.8  # cât durează desfășurarea
 
-            def op_buton(t):
-                return 1.0 - op_pret(t)
+                def scale_x(t):
+                    if t < t_start:
+                        return 0.001  # aproape invizibil
+                    progres = min(1.0, (t - t_start) / t_durata)
+                    progres_smooth = 1 - (1 - progres) ** 2  # ease out
+                    return max(0.001, progres_smooth)
+    
+                stelute = (stelute_base
+                           .resize(lambda t: (max(1, int(380 * scale_x(t))), h_stelute))
+                           .set_position(('center', y_baza + 80))
+                           .set_start(t_start)
+                           .set_duration(clip.duration - t_start))
+    
+                elemente.append(stelute)
 
-            # 2. BUTONUL GET LINK (Fundal 1)
+            # 3. BUTONUL GET LINK (Fundal 1)
             if os.path.exists("buton_bio.png"):
                 # FĂRĂ has_mask=True, MoviePy detectează singur PNG-ul
-                btn_bio = ImageClip("buton_bio.png").resize(width=450).set_duration(clip.duration - 6.0)
+                btn_bio = ImageClip("buton_bio.png").resize(width=750).set_duration(clip.duration - 6.0)
                 btn_bio = btn_bio.set_position(('center', y_baza)).set_start(6.0)
                 
                 # Aplicăm opacitatea DOAR pe mască (pe transparență)
@@ -278,9 +551,9 @@ def main():
                     btn_bio.mask = btn_bio.mask.fl(lambda gf, t: gf(t) * op_buton(t))
                 elemente.append(btn_bio)
 
-            # 3. CADRUL DE PREȚ (Fundal 2)
+            # 4. CADRUL DE PREȚ (Fundal 2)
             if os.path.exists("forma_pret.png"):
-                img_pret = ImageClip("forma_pret.png").resize(width=450).set_duration(clip.duration - 6.0)
+                img_pret = ImageClip("forma_pret.png").resize(width=750).set_duration(clip.duration - 6.0)
                 img_pret = img_pret.set_position(('center', y_baza)).set_start(6.0)
                 
                 # Aplicăm opacitatea DOAR pe mască
@@ -288,22 +561,17 @@ def main():
                     img_pret.mask = img_pret.mask.fl(lambda gf, t: gf(t) * op_pret(t))
                 elemente.append(img_pret)
 
-                # 4. TEXTUL PREȚULUI (Cel mai în față)
+                # 5. TEXTUL PREȚULUI (Cel mai în față)
                 p_val = pret_real if pret_real else "Check Price"
                 r_val = f"{reducere_reala} OFF! | " if reducere_reala else ""
-                txt_p = TextClip(f"{r_val}{p_val}", fontsize=35, color='white', font='TheBoldFont.ttf')
+                txt_p = TextClip(f"{r_val}{p_val}", fontsize=64, color='#fbbe12', font='TheBoldFont.ttf')
                 txt_p = txt_p.set_position(('center', y_baza + offset_text)).set_start(6.0).set_duration(clip.duration - 6.0)
                 
                 # Și textul are mască, o manipulăm la fel
                 if txt_p.mask is not None:
                     txt_p.mask = txt_p.mask.fl(lambda gf, t: gf(t) * op_pret(t))
                 elemente.append(txt_p) # Rămâne cel mai în față
-
-            # 5. TRUST BADGE
-            if os.path.exists("trust_badge.png"):
-                badge = ImageClip("trust_badge.png").resize(width=150).set_duration(clip.duration - 6.0)
-                badge = badge.set_position((W - 170, int(H * 0.05))).set_start(6.0).crossfadein(0.5)
-                elemente.append(badge)
+                
 
             # 6. BARA DE PROGRES
             bar_h = 12
@@ -311,14 +579,16 @@ def main():
             p_bar = p_bar.resize(lambda t: (max(1, int(W * (t / clip.duration))), bar_h)).set_position(('left', 'bottom'))
             elemente.append(p_bar)
 
-            # D. EXPORT
+            # D. EXPORT ȘI MASTERIZARE AUDIO PREMIUM
             final_video = CompositeVideoClip(elemente, size=(W,H))
             
-            if clip.audio and 'bg_clip' in locals() and bg_clip.audio:
-                
-                # ==========================================
-                # 🧠 AI MIXER: Analizăm sunetul produsului
-                # ==========================================
+            # Lista în care vom stoca toate track-urile audio pentru mixajul final
+            track_uri_audio = []
+            
+            # ==========================================
+            # 🧠 AI MIXER: Analizăm sunetul produsului și fundalul
+            # ==========================================
+            if clip.audio and bg_clip is not None and bg_clip.audio:
                 try:
                     # Citim amplitudinea maximă a clipului cu produsul
                     peak_vol = clip.audio.max_volume()
@@ -338,32 +608,79 @@ def main():
                 else:
                     vol_produs = 0.0   # Mut -> îl tăiem de tot
                     print("🔇 Clip mut. Tăiem complet sunetul.")
+                
+                # Adăugăm sunetul produsului (ajustat) și fundalul în lista de mixaj
+                track_uri_audio.append(clip.audio.volumex(vol_produs))
+                track_uri_audio.append(bg_clip.audio.volumex(0.85)) # Redus ușor pentru a lăsa loc de SFX
+                
+            # ==========================================
+            # 🎧 SFX: Efectele Sonore Premium (MrBeast Style)
+            # ==========================================
+            folder_sfx = "sfx" # Noul tău folder dedicat
+            
+            # 1. The Whoosh (Apariția butonului la secunda 6.0)
+            cale_whoosh = os.path.join(folder_sfx, "whoosh.mp3")
+            if os.path.exists(cale_whoosh):
+                # .volumex(0.6) - Vrem să se simtă, nu să sperie
+                sfx_whoosh = AudioFileClip(cale_whoosh).volumex(0.6).set_start(6.0)
+                track_uri_audio.append(sfx_whoosh)
+                print("💨 Adăugat SFX: Whoosh la 6.0s")
+            
+            # 2. The Pop (Săritura "Snappy" a steluțelor la secunda 7.0)
+            cale_pop = os.path.join(folder_sfx, "pop.mp3")
+            if os.path.exists(cale_pop):
+                # .volumex(0.9) - Vrem să fie clar și ascuțit, să taie prin zgomotul de fundal
+                sfx_pop = AudioFileClip(cale_pop).volumex(0.9).set_start(7.0)
+                track_uri_audio.append(sfx_pop)
+                print("🫧 Adăugat SFX: Dopamine Pop la 7.0s")
 
-                # ==========================================
-                # 🎛️ MIXAJUL FINAL
-                # ==========================================
-                audio_mixat = CompositeAudioClip([
-                    clip.audio.volumex(vol_produs),        
-                    bg_clip.audio.volumex(0.85) # Redus de la 1.0 pentru a preveni distorsiunea (clipping)
-                ])
+            # ==========================================
+            # 🎛️ MIXAJUL FINAL
+            # ==========================================
+            if track_uri_audio:
+                # Amestecăm absolut tot: produs, fundal, whoosh și pop
+                audio_mixat = CompositeAudioClip(track_uri_audio)
                 final_video.audio = audio_mixat
             
+            # ==========================================
+            # 💾 SALVAREA FIȘIERULUI
+            # ==========================================
             # 🔥 NOU: Adăugăm un timestamp (Timpul exact) ca să nu se suprascrie NICIODATĂ
             timestamp = int(time.time())
             out_name = os.path.join(PATH_OUTPUT, f"{nume_plat}_{timestamp}_var_{i+1}.mp4")
             print(f"⏳ [RENDER] Scriem: {out_name}")
             final_video.write_videofile(out_name, fps=30, codec='libx264', preset='ultrafast', logger=None)
+            final_video.save_frame(f"{out_name}_thumb.png", t=8.0)
+            
+            try:
+                final_video.close()
+                clip.close()
+                clip_top.close()
+                if clip_final_split is not None:  
+                   clip_final_split.close()
+                if clip_bot is not None:
+                    clip_bot.close()
+                if bg_clip is not None:
+                    bg_clip.close()
+                if sfx_whoosh is not None:
+                    sfx_whoosh.close()
+                if sfx_pop is not None:
+                    sfx_pop.close()
+            except Exception as e:
+                logging.warning(f"⚠️ [CLEANUP] Eroare: {e}")
             
             # --- DESCRIEREA "SEO BOMBER" PREMIUM ---
-            desc_SEO = f"""Get The {TITLU_PRODUS} Here! 🤯👇
+            desc_SEO = f"""⚠️ You NEED this in your life! Get it before it sells out! 👇
         
 🛒 GET THE LINK:
 👉 Go to my Channel/Profile BIO!
 (🔗 linktr.ee/GadgetHunterShop)
+⏰ Price may change anytime — grab it now!
 
-
-🌟 Why you need this gadget:
-This is one of the best Amazon finds of 2026! If you love cool tech and home hacks, this video is for you. Don't forget to subscribe for daily product hunting!
+🌟 Why everyone is buying this:
+This {TITLU_PRODUS} is going viral on Amazon right now! 
+Thousands of 5-star reviews don't lie. 
+Check the link in bio before the price goes back up!
 
 🔍 Search Tags:
 #shorts #amazonfinds #amazonmusthaves #amazonusa #usa {config['tags_specifice']} #{CONT_TARGET}

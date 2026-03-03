@@ -58,7 +58,8 @@ if __name__ == "__main__":
     
     # Logica de direcționare ("Dispecerul")
     if alegere == "1":
-        cale_finala = "video_brut.mp4"
+        nume_custom = input("📝 Nume fișier (ex: ninja, scale, ruler): ").strip()
+        cale_finala = f"{nume_custom}_brut.mp4" if nume_custom else "video_brut.mp4"
     elif alegere == "2":
         cale_finala = get_next_filename(os.path.join("assets", "pokerclips"), "poker")
     elif alegere == "3":

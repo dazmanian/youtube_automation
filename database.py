@@ -46,7 +46,9 @@ def initializeaza_db():
     except: pass
     try: cursor.execute("ALTER TABLE videos ADD COLUMN error_log TEXT")
     except: pass
-
+    try: cursor.execute("ALTER TABLE videos ADD COLUMN youtube_id TEXT")
+    except: pass
+ 
     conn.commit()
     conn.close()
 
@@ -80,7 +82,7 @@ def raport_elon_musk():
     print("════════════════════════════════════════")
     
     # Calcul "Runway" (Câte zile de libertate ai)
-    zile_libertate = pending  # Presupunând 1 postare pe zi per cont
+    zile_libertate = pending // 2 # 2 postari pe zi
     if zile_libertate > 0:
         print(f"💎 LIBERTATE: Ai conținut asigurat pentru {zile_libertate} zile!")
     else:
@@ -134,6 +136,11 @@ def adauga_video_manual():
 
 def sterge_video():
     vid_id = input("🗑️  ID-ul videoului de șters: ")
+    
+    if not vid_id.isdigit():
+       print("❌ ID invalid!")
+       return
+   
     conn = get_db_connection()
     conn.execute("DELETE FROM videos WHERE id=?", (vid_id,))
     conn.commit()
