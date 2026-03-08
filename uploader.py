@@ -74,7 +74,7 @@ def get_urmatorul_clip():
             SELECT id, cale_fisier, titlu_video, descriere
             FROM videos
             WHERE status = 'pending'
-            ORDER BY RANDOM()
+            ORDER BY id ASC
             LIMIT 1
         """).fetchone()
         conn.close()

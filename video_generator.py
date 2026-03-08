@@ -8,6 +8,8 @@ import edge_tts
 import math
 import time
 import logging
+import gc
+import re
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -18,6 +20,116 @@ from selenium.webdriver.support import expected_conditions as EC
 from datetime import datetime, timedelta
 from moviepy.editor import VideoFileClip, CompositeVideoClip, TextClip, vfx, ColorClip, clips_array, AudioFileClip, CompositeAudioClip, ImageClip
 from moviepy.video.fx.all import gamma_corr, lum_contrast, mirror_x, speedx, fadein, fadeout
+
+LIMITA_CLIP_SECUNDE = 28  # sincronizat cu database.py
+DB_NAME = "youtube_empire.db"
+
+def init_poker_tracker():
+    conn = sqlite3.connect(DB_NAME)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS poker_tracker (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fisier TEXT UNIQUE,
+            secunda_curenta REAL DEFAULT 0,
+            durata_totala REAL,
+            epuizat INTEGER DEFAULT 0
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def get_durata_video(cale):
+    try:
+        clip_temp = VideoFileClip(cale)
+        durata = clip_temp.duration
+        clip_temp.close()
+        return durata
+    except Exception as e:
+        print(f"⚠️ Eroare la citire durată: {e}")
+        return 0
+
+def get_urmatorul_segment_poker(folder_poker, limita):
+    conn = sqlite3.connect(DB_NAME)
+    
+    if not os.path.exists(folder_poker):
+        conn.close()
+        return None, None, None, None, None
+        
+    fisiere = sorted([f for f in os.listdir(folder_poker) if f.endswith('.mp4')])
+    
+    for idx, fisier in enumerate(fisiere):
+        cale_completa = os.path.join(folder_poker, fisier)
+        
+        row = conn.execute(
+            "SELECT secunda_curenta, durata_totala, epuizat FROM poker_tracker WHERE fisier = ?",
+            (fisier,)
+        ).fetchone()
+        
+        if row is None:
+            durata = get_durata_video(cale_completa)
+            conn.execute(
+                "INSERT INTO poker_tracker (fisier, secunda_curenta, durata_totala) VALUES (?, 0, ?)",
+                (fisier, durata)
+            )
+            conn.commit()
+            secunda_curenta, durata_totala, epuizat = 0, durata, 0
+        else:
+            secunda_curenta, durata_totala, epuizat = row
+        
+        if epuizat:
+            continue
+            
+        secunde_ramase = durata_totala - secunda_curenta
+        
+        if secunde_ramase < limita:
+            conn.execute(
+                "UPDATE poker_tracker SET epuizat = 1 WHERE fisier = ?",
+                (fisier,)
+            )
+            conn.commit()
+            print(f"🗑️ [{fisier}] epuizat — {secunde_ramase:.1f}s rămase. Aruncat.")
+            continue
+        
+        start = secunda_curenta
+        end = start + limita
+        
+        # ✅ Calculăm sezon și episod
+        sezon = idx + 1
+        conn2 = sqlite3.connect(DB_NAME)
+        row_ep = conn2.execute("""
+            SELECT numar_episod FROM videos 
+            WHERE status IN ('uploaded', 'pending')
+            AND numar_episod > 0
+            ORDER BY numar_episod DESC 
+            LIMIT 1
+        """).fetchone()
+        conn2.close()
+
+        episod = 1
+        if row_ep and row_ep[0]:
+            episod = row_ep[0] + 1
+        
+        conn.execute(
+            "UPDATE poker_tracker SET secunda_curenta = ? WHERE fisier = ?",
+            (end, fisier)
+        )
+        conn.commit()
+        
+        secunde_dupa = durata_totala - end
+        clipuri_ramase = int(secunde_dupa // limita)
+        
+        if clipuri_ramase <= 2:
+            print(f"⚠️  ALARMĂ: [{fisier}] mai are doar {clipuri_ramase} clip(uri)!")
+            print(f"   Descarcă un nou clip de poker cât mai curând!")
+            print(f"♠️ [POKER] {fisier} | S{sezon} E{episod} | {start:.0f}s → {end:.0f}s")
+        
+        conn.close()
+        return cale_completa, start, end, sezon, episod
+    
+    conn.close()
+    print("🚨 CRITIC: Toate clipurile de poker sunt EPUIZATE!")
+    print("   Descarcă imediat clipuri noi în assets/pokerclips/")
+    return None, None, None, None, None
 
 logging.basicConfig(
     level=logging.INFO,
@@ -43,7 +155,6 @@ USER_AGENTS = [
 # ============================================================
 # 💾 CACHE DB — Evităm request-uri inutile (6 ore TTL)
 # ============================================================
-DB_NAME = "youtube_empire.db"
 CACHE_TTL_ORE = 6
 
 def init_cache_db():
@@ -278,6 +389,12 @@ LINK_SURSA = input("3. Sursă Video: ").strip()
 CONT_TARGET = input("4. Cont Target(Gadgets): ").strip()
 START_SEC = input("5. Secunda de start (ex: 120 pt min 2:00) [Lasă GOL pt Automat]: ").strip()
 
+print("\n🎬 TIP CONȚINUT POKER:")
+print("1. ♠️  Episoade Seriale (poker[x].mp4) → badge S/E")
+print("2. 🏆 Best Moments     (best[x].mp4)  → fără badge")
+tip_ales = input("\nAlegere (1/2): ").strip()
+TIP_CONTINUT = "poker" if tip_ales == "1" else "best"
+
 if not TITLU_PRODUS or not LINK_AFILIERE: exit()
 
 # --- 3. FUNCȚII AUXILIARE ---
@@ -309,13 +426,13 @@ def genereaza_voce_ai(text):
         print(f"⚠️ [VOCE EROARE]: {e}")
         return None
 
-def adauga_in_imperiu(cale, titlu, descriere, stil):
+def adauga_in_imperiu(cale, titlu, descriere, stil, episod):
     try:
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
         url_u = f"{LINK_SURSA}_{stil}_{random.randint(1000,9999)}"
-        cursor.execute("INSERT INTO videos (sursa_url, affiliate_link, cont_target, titlu_video, descriere, cale_fisier, status) VALUES (?,?,?,?,?,?, 'pending')", 
-                       (url_u, LINK_AFILIERE, CONT_TARGET, titlu, descriere, cale))
+        cursor.execute("INSERT INTO videos (sursa_url, affiliate_link, cont_target, titlu_video, descriere, cale_fisier, status, numar_episod) VALUES (?,?,?,?,?,?, 'pending', ?)", 
+                       (url_u, LINK_AFILIERE, CONT_TARGET, titlu, descriere, cale, episod))
         conn.commit()
         conn.close()
     except Exception as e: print(f"⚠️ DB Error: {e}")
@@ -328,6 +445,7 @@ def op_buton(t):
 
 # --- 4. ENGINE PRINCIPAL ---
 def main():
+    init_poker_tracker()
     if not os.path.exists(PATH_OUTPUT): os.makedirs(PATH_OUTPUT)
     if not os.path.exists(VIDEO_SURSA):
         print(f"❌ Lipsă '{VIDEO_SURSA}'! Rulează downloader.")
@@ -351,31 +469,42 @@ def main():
     inventar_produse = {
      "toloco": {
         "tags_nisa": "#massagegun #backpainrelief",
-        "hook": "I cancelled my $200 massage appointment 💀"
+        "hook": "I cancelled my $200 massage appointment"
       },
      "air_purifier": {
         "tags_nisa": "#airpurifier #blueair",
-        "hook": "I was breathing POISON at home 😮"
+        "hook": "I was breathing POISON at home"
       },
      "ninja_airfryer": {
          "tags_nisa": "#airfryer #ninja #cooking",
-         "hook": "My oven has been OFF for 3 months 🔥"
+         "hook": "My oven has been OFF for 3 months"
       },
      "wyze_scale": {
          "tags_nisa": "#smartscale #fitness #weightloss",
-         "hook": "My scale was LYING to me for years 🤯"
+         "hook": "My scale was LYING to me for years"
       },
      "hozo_ruler": {
          "tags_nisa": "#gadgets #diytool #cooltech",
-         "hook": "Nobody uses a tape measure anymore... 📏"
+         "hook": "Nobody uses a tape measure anymore..."
+      },
+     "ninja_crispi": {
+         "tags_nisa": "#airfryer #ninja #cooking #kitchengadgets #foodtiktok",
+         "hook": "I just entered my chef era"
       }
+    }
+    
+    # ==========================================
+    # 🏆 BEST MOMENTS — Timestamp-uri manuale
+    # ==========================================
+    best_moments = {
+        "best2.mp4": [7, 123, 275, 401, 502, 556, 690, 787],
     }
     
     # ==========================================
     # 🕹️ PANOUL DE CONTROL (Ce producem azi?)
     # ==========================================
     # Asta e SINGURA linie pe care o modifici dimineața. Îi spui fabricii ce să proceseze.
-    ID_PRODUS_CURENT = "ninja_airfryer"  # <--- Schimbi aici din 'toloco' în 'sleep_mask'
+    ID_PRODUS_CURENT = "hozo_ruler"  # <--- Schimbi aici din 'toloco' în 'sleep_mask'
 
     # Sistemul extrage automat datele produsului:
     produs_activ = inventar_produse[ID_PRODUS_CURENT]
@@ -411,15 +540,18 @@ def main():
         print(f"==================================================")
 
         # LOOP 2: Generăm cele 5 variante pentru platforma curentă
-        for i in range(5):
+        for i in range(2):
             
-            print(f"\n🔨 Varianta {i+1}/5: {nume_plat.upper()} SPLIT SCREEN (50/50)")
+            print(f"\n🔨 Varianta {i+1}/2: {nume_plat.upper()} SPLIT SCREEN (50/50)")
             
             bg_clip = None
             clip_bot = None
             sfx_whoosh = None
             sfx_pop = None
             clip_final_split = None
+            bg_path = None      
+            seg_start = None
+            seg_end = None 
             
             # A. CALCUL TIMP (Adaptat la platformă)
             start_t = 0
@@ -445,17 +577,49 @@ def main():
             target_bot_h = int(H * 0.50)   # 50% FIX pentru Poker
         
             clip_top = resize_to_fill(clip, W, target_top_h)
+            
+            sezon = 1
+            episod = 1
 
             if os.path.exists(folder_bg) and os.listdir(folder_bg):
                   try:
-                      bg_path = os.path.join(folder_bg, random.choice(os.listdir(folder_bg)))
-                      bg_clip = VideoFileClip(bg_path)
-                    
-                      if bg_clip.duration < clip.duration: 
-                          bg_clip = bg_clip.loop(duration=clip.duration)
+                      # ✅ EPISODIC — consumă secvențial, nu random
+                      if nume_plat == "youtube":
+                          if TIP_CONTINUT == "poker":
+                              bg_path, seg_start, seg_end, sezon, episod = get_urmatorul_segment_poker(folder_bg, limita_max)
+                          else:
+                              fisiere_best = sorted([f for f in os.listdir(folder_bg) if f.startswith('best') and f.endswith('.mp4')])
+                              if not fisiere_best:
+                                  print("❌ Nu există fișiere best*.mp4 în pokerclips!")
+                                  continue
+                              bg_path = os.path.join(folder_bg, random.choice(fisiere_best))
+                              bg_clip_temp = VideoFileClip(bg_path)
+                              nume_fisier = os.path.basename(bg_path)
+                              secunde_disponibile = best_moments.get(nume_fisier, None)
+                              if secunde_disponibile:
+                                  seg_start = float(random.choice(secunde_disponibile))
+                                  print(f"🏆 Best moment selectat: {nume_fisier} la secunda {seg_start}")
+                              else:
+                                  seg_start = random.uniform(0, bg_clip_temp.duration - limita_max)
+                                  print(f"🎲 Random fallback: {nume_fisier} la secunda {seg_start:.1f}")
+                              seg_end = seg_start + limita_max
+                              bg_clip_temp.close()
+                              sezon, episod = None, None
+                          if bg_path is None:
+                              print(f"❌ Nu există clipuri poker disponibile!")
+                              clip_final_split = resize_to_fill(clip, W, H)
+                              elemente.append(clip_final_split)
+                              continue
+                          bg_clip = VideoFileClip(bg_path).subclip(seg_start, seg_end)
                       else:
-                          r_start = random.uniform(0, bg_clip.duration - clip.duration)
-                          bg_clip = bg_clip.subclip(r_start, r_start + clip.duration)
+                          # TikTok rămâne random ca înainte
+                          bg_path = os.path.join(folder_bg, random.choice(os.listdir(folder_bg)))
+                          bg_clip = VideoFileClip(bg_path)
+                          if bg_clip.duration < clip.duration:
+                              bg_clip = bg_clip.loop(duration=clip.duration)
+                          else:
+                              r_start = random.uniform(0, bg_clip.duration - clip.duration)
+                              bg_clip = bg_clip.subclip(r_start, r_start + clip.duration)
                     
                       clip_bot = resize_to_fill(bg_clip, W, target_bot_h)
                       clip_final_split = clips_array([[clip_top], [clip_bot]])
@@ -469,82 +633,121 @@ def main():
             elemente.append(clip_final_split)
             
             # ✅ HOOK TEXT PREMIUM — primele 2.5 secunde
-            if os.path.exists("TheBoldFont.ttf"):
+            if os.path.exists("BebasNeue-Regular.ttf"):
     
-                # Fundal pentru HOOK 1
-                hook_bg = ColorClip(size=(W, 90), color=(0, 0, 0))
-                hook_bg = (hook_bg
-                           .set_opacity(0.55)
-                           .set_position(('left', int(H * 0.06)))
-                           .set_start(0)
-                           .set_duration(2.5))
-                elemente.append(hook_bg)
-                
-                # Fundal pentru HOOK 2
-                hook_bg2 = ColorClip(size=(W, 90), color=(0, 0, 0))
-                hook_bg2 = (hook_bg2
-                            .set_opacity(0.55)
-                            .set_position(('left', int(H * 0.06)))
-                            .set_start(2.5)
-                            .set_duration(1.5))
-                elemente.append(hook_bg2)
-    
-                # Textul hook-ului
-                hook_text = TextClip(produs_activ['hook'], fontsize=48, color='#FFD700', 
-                         font='TheBoldFont.ttf', stroke_color='black', stroke_width=2)
-    
-                # HOOK 1 — apare la secunda 0, dispare la 2.5
-                hook_text = (hook_text
-                             .set_position(('center', int(H * 0.07)))
-                             .set_start(0)
-                             .set_duration(2.5)
-                             .fadein(0.3)
-                             .fadeout(0.2))
-                elemente.append(hook_text)
+                hook_cuvinte = produs_activ['hook'].split()
+                str_inainte = hook_cuvinte[0]
+                str_auriu = hook_cuvinte[1] if len(hook_cuvinte) > 1 else ""
+                str_dupa = " ".join(hook_cuvinte[2:])
+
+                # NU mai calculăm x_start manual
+                # NU mai folosim resize cu pulse
+                # Folosim method='caption' + set_position center
+
+                def adauga_hook_centrat(text_complet, str_auriu, start, durata):
+                    # SHADOW/STROKE — text complet negru dedesubt
+                    for dx, dy in [(-2,0),(2,0),(0,-2),(0,2)]:
+                        s = TextClip(text_complet, fontsize=58, color='black',
+                                    font='BebasNeue-Regular.ttf',
+                                    method='caption', size=(950, None), align='center')
+                        s = (s.set_position(('center', int(H * 0.18) + dy))
+                              .set_opacity(0.9)
+                              .set_start(start).set_duration(durata)
+                              .fadein(0.1).fadeout(0.2))
+                        elemente.append(s)
+        
+                    # TEXT ALB — baza
+                    t_alb = TextClip(text_complet, fontsize=58, color='white',
+                                     font='BebasNeue-Regular.ttf',
+                                     method='caption', size=(950, None), align='center')
+                    t_alb = (t_alb.set_position(('center', int(H * 0.18)))
+                                  .set_start(start).set_duration(durata)
+                                  .fadein(0.1).fadeout(0.2))
+                    elemente.append(t_alb)
+        
+                    # CUVÂNT AURIU — peste textul alb, doar cuvântul 2
+                    t_auriu = TextClip(str_auriu, fontsize=62, color='#FFD700',
+                                       font='BebasNeue-Regular.ttf')
+        
+                    # Calculăm x pentru cuvântul auriu
+                    _base = TextClip(text_complet, fontsize=58, color='white',
+                                    font='BebasNeue-Regular.ttf',
+                                    method='caption', size=(950, None), align='center')
+                    _before = TextClip(str_inainte + " ", fontsize=58, color='white',
+                                       font='BebasNeue-Regular.ttf')
+                    x_auriu = (W - _base.w) // 2 + _before.w
+                    _base.close(); _before.close()
+        
+                    t_auriu = (t_auriu.set_position((x_auriu, int(H * 0.18)))
+                                      .set_start(start).set_duration(durata)
+                                      .fadein(0.1).fadeout(0.2))
+                    elemente.append(t_auriu)
+
+                # HOOK 1
+                text_complet = f"{str_inainte} {str_auriu} {str_dupa}".strip()
+                adauga_hook_centrat(text_complet, str_auriu, 0, 2.5)
+
+                # HOOK 2
+                adauga_hook_centrat("HERE'S WHY... 👇", "HERE'S", 2.5, 1.5)
             
-                # HOOK 2 — "Double Take" — apare la 2.5, creează bridge spre produs
-                hook2_text = TextClip("Here's why... 👇", fontsize=40, color='white',
-                                      font='TheBoldFont.ttf', stroke_color='black', stroke_width=2)
-                hook2_text = (hook2_text
-                              .set_position(('center', int(H * 0.07)))
-                              .set_start(2.5).set_duration(1.5)
-                              .fadein(0.2).fadeout(0.2))
-                elemente.append(hook2_text)
+            # ♠️ NETFLIX EPISODE BADGE — dreapta sus în zona poker
+            if nume_plat == "youtube" and episod is not None and os.path.exists("BebasNeue-Regular.ttf"):
+    
+               badge_w, badge_h = 155, 48
+               badge_y = int(H * 0.50) + 24
+               badge_x_final = W - badge_w - 16
+               t_aparitie = 1.5
+               t_anim = 0.4
+               
+               def badge_pozitie(t):
+                   if t < t_aparitie:
+                       return (W + 10, badge_y)
+                   progres = min(1.0, (t - t_aparitie) / t_anim)
+                   progres_smooth = 1 - (1 - progres) ** 3
+                   x_curent = W + 10 - (W + 10 - badge_x_final) * progres_smooth
+                   return (int(x_curent), badge_y)
+            
+
+               # FUNDAL roșu Netflix — dreptunghi rotunjit simulat cu ColorClip
+               badge_bg = ColorClip(size=(badge_w, badge_h), color=(180, 0, 0))
+               badge_bg = (badge_bg
+                           .set_position(badge_pozitie)
+                           .set_opacity(0.88)
+                           .set_start(t_aparitie)
+                           .set_duration(clip.duration - t_aparitie)
+                           .fadein(t_anim))
+               elemente.append(badge_bg)
+
+               # TEXT S1 · E3
+               badge_text = TextClip(
+                   f"S{sezon}  ·  E{episod}",
+                   fontsize=30,
+                   color='white',
+                   font='BebasNeue-Regular.ttf',
+               )
+               badge_text = (badge_text
+                             .set_position(lambda t: (
+                                 int(badge_pozitie(t)[0]) + 12,
+                                 badge_y + 8
+                             ))
+                             .set_start(t_aparitie)
+                             .set_duration(clip.duration - t_aparitie)
+                             .fadein(t_anim))
+               elemente.append(badge_text)
 
             # --- C. ELEMENTE GRAFICE PREMIUM (V8.5) ---
         
             y_baza = int(H * 0.35) # Ambele stau FIX în același loc
-            offset_text = 182      # Reglajul pentru centrarea textului în cadran
-            
-            # 2. TRUST BADGE DINAMIC (Sertarul care sare din spate)
-            # Îl adăugăm PRIMUL în listă, ca să fie pe stratul din spate!
-            if os.path.exists("stelute_dinamice.png"):
-                stelute_base = ImageClip("stelute_dinamice.png").resize(width=380)
-                h_stelute = stelute_base.h
-                
-                t_start = 6.0
-                t_durata = 0.8  # cât durează desfășurarea
-
-                def scale_x(t):
-                    if t < t_start:
-                        return 0.001  # aproape invizibil
-                    progres = min(1.0, (t - t_start) / t_durata)
-                    progres_smooth = 1 - (1 - progres) ** 2  # ease out
-                    return max(0.001, progres_smooth)
-    
-                stelute = (stelute_base
-                           .resize(lambda t: (max(1, int(380 * scale_x(t))), h_stelute))
-                           .set_position(('center', y_baza + 80))
-                           .set_start(t_start)
-                           .set_duration(clip.duration - t_start))
-    
-                elemente.append(stelute)
+            offset_text = 172      # Reglajul pentru centrarea textului în cadran
 
             # 3. BUTONUL GET LINK (Fundal 1)
             if os.path.exists("buton_bio.png"):
                 # FĂRĂ has_mask=True, MoviePy detectează singur PNG-ul
                 btn_bio = ImageClip("buton_bio.png").resize(width=750).set_duration(clip.duration - 6.0)
-                btn_bio = btn_bio.set_position(('center', y_baza)).set_start(6.0)
+                btn_bio = (btn_bio
+                           .set_position(('center', y_baza))
+                           .set_start(6.0)
+                           .fadein(0.5))
                 
                 # Aplicăm opacitatea DOAR pe mască (pe transparență)
                 if btn_bio.mask is not None:
@@ -554,7 +757,10 @@ def main():
             # 4. CADRUL DE PREȚ (Fundal 2)
             if os.path.exists("forma_pret.png"):
                 img_pret = ImageClip("forma_pret.png").resize(width=750).set_duration(clip.duration - 6.0)
-                img_pret = img_pret.set_position(('center', y_baza)).set_start(6.0)
+                img_pret = (img_pret
+                            .set_position(('center', y_baza))
+                            .set_start(6.0)
+                            .fadein(0.5))
                 
                 # Aplicăm opacitatea DOAR pe mască
                 if img_pret.mask is not None:
@@ -564,8 +770,12 @@ def main():
                 # 5. TEXTUL PREȚULUI (Cel mai în față)
                 p_val = pret_real if pret_real else "Check Price"
                 r_val = f"{reducere_reala} OFF! | " if reducere_reala else ""
-                txt_p = TextClip(f"{r_val}{p_val}", fontsize=64, color='#fbbe12', font='TheBoldFont.ttf')
-                txt_p = txt_p.set_position(('center', y_baza + offset_text)).set_start(6.0).set_duration(clip.duration - 6.0)
+                txt_p = TextClip(f"{r_val}{p_val}", fontsize=64, color='#fbbe12', font='BebasNeue-Regular.ttf')
+                txt_p = (txt_p
+                         .set_position(('center', y_baza + offset_text))
+                         .set_start(6.0)
+                         .set_duration(clip.duration - 6.0)
+                         .fadein(0.5))
                 
                 # Și textul are mască, o manipulăm la fel
                 if txt_p.mask is not None:
@@ -669,6 +879,11 @@ def main():
             except Exception as e:
                 logging.warning(f"⚠️ [CLEANUP] Eroare: {e}")
             
+            
+            # ✅ ADAUGI DUPĂ CLEANUP:
+            gc.collect()
+            print(f"🧹 RAM eliberat după clipul {i+1}")
+            
             # --- DESCRIEREA "SEO BOMBER" PREMIUM ---
             desc_SEO = f"""⚠️ You NEED this in your life! Get it before it sells out! 👇
         
@@ -695,14 +910,17 @@ As an Amazon Associate, I earn from qualifying purchases. This helps support the
             if nume_plat == "youtube":
                 # Cream o lista de variatii vizuale ca sa facem fiecare titlu unic
                 emoji_spin = ["🤯", "🔥", "👀", "✨", "💯"]
-                titlu_unic = f"{TITLU_PRODUS} {emoji_spin[i]}" # Adaugă un emoji diferit pt fiecare din cele 5
-                adauga_in_imperiu(out_name, titlu_unic, desc_SEO, f"{nume_plat}_{i+1}")
+                if TIP_CONTINUT == "poker":
+                    titlu_unic = f"{TITLU_PRODUS} {emoji_spin[i]} | S{sezon} E{episod}"
+                else:
+                    titlu_unic = f"{TITLU_PRODUS} {emoji_spin[i]} 🏆"
+                adauga_in_imperiu(out_name, titlu_unic, desc_SEO, f"{nume_plat}_{i+1}", episod if episod is not None else 0)
                 print(f"📥 [DB] Salvat automat în pending: {out_name}")
             else:
                 print(f"⏭️ [SKIP DB] Pregătit pentru upload manual: {out_name}")
 
     clip_mare.close()
-    print("\n✅ FABRICA A TERMINAT! Ai 5 clipuri pentru YouTube și 5 pentru TikTok în folderul 'output_videos'.")
+    print("\n✅ FABRICA A TERMINAT! Ai 2 clipuri pentru YouTube și 2 pentru TikTok în folderul 'output_videos'.")
 
 if __name__ == "__main__":
     main()

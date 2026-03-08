@@ -13,7 +13,7 @@
 ### ⬛ TIKTOK (Algoritm Rapid / Faza de Testare)
 - **Câte pe zi:** 3 videoclipuri / zi.
 - **De ce:** TikTok testează instant. Ai nevoie de volum ca să găsești „cârligul” (hook-ul) perfect.
-- **Regulă:** Upload manual de pe telefon/PC. Folosim metoda "Zebra" (alternăm produsele). Nu postăm de 3 ori același produs în aceeași zi.
+- **Regulă:** Upload manual de pe telefon/PC. Folosim metoda "Zebra" (alternăm produsele). Nu postăm de 3 ori același produs în aceeași zi. Maxim 6 cuvinte pentru titlu.
 
 ### 🟥 YOUTUBE SHORTS (Algoritm Diesel / Faza de Scalare)
 - **Câte pe zi:** 2 videoclipuri / zi.
@@ -26,7 +26,7 @@
 *Atenție: Aceste ore sunt calculate pentru a lovi piața din SUA (Amazon US) la orele lor de vârf.*
 
 **[ TURA 1 ] - Dimineața lor (Oamenii merg spre muncă / școală)**
-- **Ora RO:** 15:00 - 16:00
+- **Ora RO:** 15:00 - 17:00
 - **Acțiune:** 1x TikTok + 1x YouTube Short
 
 **[ TURA 2 ] - Pauza de prânz a lor**
@@ -34,9 +34,11 @@
 - **Acțiune:** 1x TikTok
 
 **[ TURA 3 ] - Seara lor (Prime-time, stau în pat și dau scroll)**
-- **Ora RO:** 01:00 - 02:00 (Noaptea)
+- **Ora RO:** 00:00 - 02:00 (Noaptea)
 - **Acțiune:** 1x TikTok + 1x YouTube Short
 *(Sfat: Pentru tura de noapte, folosește funcția de "Schedule" pe YouTube sau lasă Selenium să ruleze singur).*
+
+- Fiecare saptamana este pentru un singur produs!
 
 ---
 

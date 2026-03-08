@@ -47,10 +47,11 @@ if __name__ == "__main__":
     print("1. 📦 Reclamă Produs    -> video_brut.mp4")
     print("2. ♠️ Fundal Poker      -> assets/pokerclips/poker[x].mp4")
     print("3. 🚗 Fundal GTA/TikTok -> assets/tikclips/tik[x].mp4")
+    print("4. 🏆 Best Moments      -> assets/pokerclips/best[x].mp4")
     
-    alegere = input("\nCe fel de clip descarci? (1/2/3): ").strip()
+    alegere = input("\nCe fel de clip descarci? (1/2/3/4): ").strip()
     
-    if alegere not in ["1", "2", "3"]:
+    if alegere not in ["1", "2", "3", "4"]:
         print("❌ Alegere invalidă! Pornește scriptul din nou.")
         exit()
 
@@ -64,5 +65,7 @@ if __name__ == "__main__":
         cale_finala = get_next_filename(os.path.join("assets", "pokerclips"), "poker")
     elif alegere == "3":
         cale_finala = get_next_filename(os.path.join("assets", "tikclips"), "tik")
+    elif alegere == "4":
+        cale_finala = get_next_filename(os.path.join("assets", "pokerclips"), "best")
         
     download_video(link, cale_finala)
