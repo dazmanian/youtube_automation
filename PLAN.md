@@ -8,6 +8,13 @@
 
 ---
 
+## FORMULA HOOK (MR BEAST)
+
+- Niciun adjectiv
+- Niciun adverb
+- Doar: EU + ACȚIUNE + OBIECT
+**(Creierul uman procesează 5 cuvinte în 0.3 secunde — exact cât durează decizia de scroll sau stop.)**
+
 ## 📅 FRECVENȚA DE POSTARE (VOLUMUL MATEMATIC)
 
 ### ⬛ TIKTOK (Algoritm Rapid / Faza de Testare)

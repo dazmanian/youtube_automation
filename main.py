@@ -16,7 +16,7 @@ def main_menu():
         banner()
         print("\n🎛️  PANOU DE CONTROL:")
         print("1. 📥 [DOWNLOADER]:  Descarcă video brut")
-        print("2. 🏭 [GENERATOR]:   Crează 5 variante (50/50 Poker Split)")
+        print("2. 🏭 [GENERATOR]:   Crează 2 variante (50/50 Poker Split)")
         print("3. 🚀 [UPLOADER]:    Postează automat (Scheduler API)")
         print("4. 🔧 [BACKUP]:      Upload Manual (Selenium)")
         print("5. 📊 [DATABASE]:    Vezi Statistici & Coada")

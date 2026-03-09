@@ -130,7 +130,7 @@ def uploadeaza_clip(youtube, cale_fisier, titlu, descriere):
                 "snippet": {
                     "title": titlu[:100],           # YouTube limită: 100 caractere
                     "description": descriere[:5000], # YouTube limită: 5000 caractere
-                    "categoryId": "22",              # People & Blogs (bun pentru Shorts)
+                    "categoryId": "28",              # Science & Technology
                     "defaultLanguage": "en",
                     "defaultAudioLanguage": "en"
                 },

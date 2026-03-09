@@ -174,6 +174,64 @@ def upload_selenium():
         except:
             pass # Uneori e selectat deja
 
+        # --- 4. MORE OPTIONS — trebuie click ca să apară categoria și limba ---
+        print("⚙️ [MORE OPTIONS]: Deschid setările avansate...")
+        try:
+            more_options = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH, 
+                    "//*[contains(text(), 'Show more') or contains(text(), 'More options') or contains(text(), 'Afișați mai multe')]"
+                ))
+            )
+            driver.execute_script("arguments[0].click();", more_options)
+            time.sleep(2)
+            print("✅ [MORE OPTIONS]: Deschis!")
+        except Exception as e:
+            print(f"⚠️ [MORE OPTIONS]: {e}")
+            
+        # --- 5. CATEGORIE — Science & Technology ---
+        print("🔬 [CATEGORIE]: Setez Science & Technology...")
+        try:
+            category_dropdown = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH,
+                    "//ytcp-form-select[@id='category']//ytcp-select"
+                ))
+            )
+            driver.execute_script("arguments[0].click();", category_dropdown)
+            time.sleep(1.5)
+
+            science_option = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH,
+                    "//tp-yt-paper-item[@role='option'][contains(., 'Science')]"
+                ))
+            )
+            driver.execute_script("arguments[0].click();", science_option)
+            time.sleep(1)
+            print("✅ [CATEGORIE]: Science & Technology setat!")
+        except Exception as e:
+            print(f"⚠️ [CATEGORIE]: {e}")
+        
+        # --- 6. LIMBA — English ---
+        print("🌍 [LIMBA]: Setez English...")
+        try:
+            lang_dropdown = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH,
+                    "//ytcp-form-select[@id='language']//ytcp-select"
+                ))
+            )
+            driver.execute_script("arguments[0].click();", lang_dropdown)
+            time.sleep(1.5)
+
+            english_option = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH,
+                    "//tp-yt-paper-item[@role='option'][contains(., 'English') and not(contains(., '('))]"
+                ))
+            )
+            driver.execute_script("arguments[0].click();", english_option)
+            time.sleep(1)
+            print("✅ [LIMBA]: English setat!")
+        except Exception as e:
+            print(f"⚠️ [LIMBA]: {e}")
+            
         # --- NEXT, NEXT, NEXT ---
         print("➡️ [NAVIGARE]: Next x3...")
         for i in range(3):

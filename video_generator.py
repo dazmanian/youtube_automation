@@ -383,11 +383,10 @@ VIDEO_SURSA = input("6. Fișier video sursă (ex: ninja_brut.mp4): ").strip() or
 
 # --- INPUT INTERACTIV ---
 print("\n💎 --- GENERATOR V8.0 (POKER SPLIT EXCLUSIVE | DUAL FACTORY: YT + TIKTOK) ---")
-TITLU_PRODUS = input("1. Nume Produs: ").strip()
-LINK_AFILIERE = input("2. Link Afiliere: ").strip()
-LINK_SURSA = input("3. Sursă Video: ").strip()
-CONT_TARGET = input("4. Cont Target(Gadgets): ").strip()
-START_SEC = input("5. Secunda de start (ex: 120 pt min 2:00) [Lasă GOL pt Automat]: ").strip()
+LINK_AFILIERE = input("1. Link Afiliere: ").strip()
+LINK_SURSA = input("2. Sursă Video: ").strip()
+CONT_TARGET = input("3. Cont Target(Gadgets): ").strip()
+START_SEC = input("4. Secunda de start (ex: 120 pt min 2:00) [Lasă GOL pt Automat]: ").strip()
 
 print("\n🎬 TIP CONȚINUT POKER:")
 print("1. ♠️  Episoade Seriale (poker[x].mp4) → badge S/E")
@@ -395,7 +394,7 @@ print("2. 🏆 Best Moments     (best[x].mp4)  → fără badge")
 tip_ales = input("\nAlegere (1/2): ").strip()
 TIP_CONTINUT = "poker" if tip_ales == "1" else "best"
 
-if not TITLU_PRODUS or not LINK_AFILIERE: exit()
+if not LINK_AFILIERE: exit()
 
 # --- 3. FUNCȚII AUXILIARE ---
 def resize_to_fill(clip, target_w, target_h):
@@ -450,8 +449,6 @@ def main():
     if not os.path.exists(VIDEO_SURSA):
         print(f"❌ Lipsă '{VIDEO_SURSA}'! Rulează downloader.")
         return
-
-    print(f"\n🎬 Procesez: {TITLU_PRODUS}")
     
     pret_real, reducere_reala = extrage_pret_amazon(LINK_AFILIERE)
     
@@ -468,28 +465,113 @@ def main():
 
     inventar_produse = {
      "toloco": {
+        "nume": "Toloco Massage Gun",
         "tags_nisa": "#massagegun #backpainrelief",
-        "hook": "I cancelled my $200 massage appointment"
+        "hooks": [
+            "I FIRED MY MASSAGE THERAPIST",        # 🔥 Șocant
+            "MY BACK STOPPED HURTING INSTANTLY",   # 😮 Serios/rezultat
+            "POV YOUR BACK PAIN IS GONE",          # 👁️ POV
+            "THERAPISTS HATE THIS CHEAP THING",    # 😂 Amuzant
+            "I SPENT $0 ON MASSAGES NOW"           # 😂 Amuzant/cifră
+        ],
+        "titluri": [
+            "This Massage Gun Destroyed My Pain",
+            "I Cancelled Every Massage Appointment",
+            "My Back Finally Stopped Hurting Forever",
+            "This Thing Replaced My Massage Therapist",
+            "I Fixed My Back For $50"
+        ]
       },
      "air_purifier": {
+        "nume": "Air Purifier",
         "tags_nisa": "#airpurifier #blueair",
-        "hook": "I was breathing POISON at home"
+        "hooks": [
+            "I WAS BREATHING POISON DAILY",        # 🔥 Șocant
+            "MY ALLERGIES DISAPPEARED OVERNIGHT",  # 😮 Serios/rezultat
+            "POV YOUR HOME AIR IS TOXIC",          # 👁️ POV
+            "MY LUNGS FINALLY FILED A COMPLAINT",  # 😂 Amuzant
+            "I TESTED MY AIR AND PANICKED"         # 😂 Amuzant/tensiune
+        ],
+        "titluri": [
+            "I Was Breathing Poison Every Night",
+            "This Device Changed My Home Air Forever",
+            "My Allergies Disappeared After One Week",
+            "I Finally Tested My Home Air Quality",
+            "This Air Purifier Shocked My Doctor"
+        ]
       },
      "ninja_airfryer": {
+         "nume": "Ninja Air Fryer",
          "tags_nisa": "#airfryer #ninja #cooking",
-         "hook": "My oven has been OFF for 3 months"
+         "hooks": [
+             "MY OVEN STAYS OFF FOREVER",           # 🔥 Șocant
+             "I COOK FASTER THAN DOORDASH NOW",     # 😮 Serios/rezultat
+             "POV YOUR OVEN COLLECTS DUST",         # 👁️ POV
+             "MY OVEN IS COLLECTING DUST NOW",      # 😂 Amuzant
+             "I APOLOGIZED TO MY AIRFRYER TODAY"    # 😂 Amuzant/absurd
+        ],
+         "titluri": [
+             "My Oven Has Been Off For Months",
+             "This Air Fryer Replaced My Entire Kitchen",
+             "I Cook Everything In This One Thing",
+             "My Gas Bill Dropped After This Purchase",
+             "This Changed How I Cook Forever"
+        ]
       },
      "wyze_scale": {
+         "nume": "Wyze Smart Scale",
          "tags_nisa": "#smartscale #fitness #weightloss",
-         "hook": "My scale was LYING to me for years"
+         "hooks": [
+             "MY SCALE LIED FOR YEARS",             # 🔥 Șocant
+             "I FINALLY KNOW MY REAL BODY",         # 😮 Serios/rezultat
+             "POV YOUR SCALE IS LYING TO YOU",      # 👁️ POV
+             "MY OLD SCALE WAS A PATHOLOGICAL LIAR",# 😂 Amuzant
+             "I SUED MY SCALE FOR DEFAMATION"       # 😂 Amuzant/absurd
+        ],
+         "titluri": [
+             "My Scale Was Lying To Me For Years",
+             "This Smart Scale Knows Everything About Me",
+             "I Finally Know My Real Body Stats",
+             "My Doctor Was Shocked By This Scale",
+             "This Scale Changed My Fitness Forever"
+        ]
+
       },
      "hozo_ruler": {
+         "nume": "HOZO NeoRulerGo",
          "tags_nisa": "#gadgets #diytool #cooltech",
-         "hook": "Nobody uses a tape measure anymore..."
+         "hooks": [
+             "MY CONTRACTOR HATES THIS THING",      # 🔥 Șocant
+             "I MEASURED EVERYTHING IN SECONDS",    # 😮 Serios/rezultat
+             "POV YOUR TAPE MEASURE IS USELESS",    # 👁️ POV
+             "MY TAPE MEASURE RETIRED LAST WEEK",   # 😂 Amuzant
+             "I MEASURED MY WHOLE HOUSE IN MINUTES" # 😂 Amuzant/exagerare
+        ],
+         "titluri": [
+             "This Ruler Reads Your Mind",
+             "My Contractor Hates This $40 Device",
+             "I Measured My Entire House In Minutes",
+             "This Thing Replaced Every Measuring Tool",
+             "My Tape Measure Retired Last Week"
+        ]
       },
      "ninja_crispi": {
+         "nume": "Ninja CRISPi 4in1 Airfryer",
          "tags_nisa": "#airfryer #ninja #cooking #kitchengadgets #foodtiktok",
-         "hook": "I just entered my chef era"
+          "hooks": [
+              "I FIRED MY PERSONAL CHEF",            # 🔥 Șocant
+              "I COOK LIKE GORDON RAMSAY NOW",       # 😮 Serios/rezultat
+              "POV YOU JUST ENTERED YOUR CHEF ERA",  # 👁️ POV
+              "GORDON RAMSAY WOULD BE JEALOUS",      # 😂 Amuzant
+              "MY MICROWAVE FEELS PERSONALLY ATTACKED" # 😂 Amuzant/absurd
+        ],
+          "titluri": [
+              "This Air Fryer Changed Everything Forever",
+              "I Fired My Personal Chef Last Week",
+              "My Kitchen Will Never Be The Same",
+              "I Cook Like Gordon Ramsay Now",
+              "This 4in1 Airfryer Broke The Internet"
+        ]
       }
     }
     
@@ -497,7 +579,7 @@ def main():
     # 🏆 BEST MOMENTS — Timestamp-uri manuale
     # ==========================================
     best_moments = {
-        "best2.mp4": [7, 123, 275, 401, 502, 556, 690, 787],
+        "best2.mp4": [123, 275, 401, 502, 556, 690],
     }
     
     # ==========================================
@@ -505,9 +587,11 @@ def main():
     # ==========================================
     # Asta e SINGURA linie pe care o modifici dimineața. Îi spui fabricii ce să proceseze.
     ID_PRODUS_CURENT = "hozo_ruler"  # <--- Schimbi aici din 'toloco' în 'sleep_mask'
-
+ 
     # Sistemul extrage automat datele produsului:
     produs_activ = inventar_produse[ID_PRODUS_CURENT]
+    
+    print(f"\n🎬 Procesez: {produs_activ['nume']}")
     
     
     # ==========================================
@@ -635,60 +719,37 @@ def main():
             # ✅ HOOK TEXT PREMIUM — primele 2.5 secunde
             if os.path.exists("BebasNeue-Regular.ttf"):
     
-                hook_cuvinte = produs_activ['hook'].split()
+                hook_cuvinte = random.choice(produs_activ['hooks']).split()
                 str_inainte = hook_cuvinte[0]
                 str_auriu = hook_cuvinte[1] if len(hook_cuvinte) > 1 else ""
                 str_dupa = " ".join(hook_cuvinte[2:])
 
-                # NU mai calculăm x_start manual
-                # NU mai folosim resize cu pulse
-                # Folosim method='caption' + set_position center
-
-                def adauga_hook_centrat(text_complet, str_auriu, start, durata):
-                    # SHADOW/STROKE — text complet negru dedesubt
+                def adauga_hook_simplu(text, start, durata):
+                    # STROKE — 4 shadow-uri negre
                     for dx, dy in [(-2,0),(2,0),(0,-2),(0,2)]:
-                        s = TextClip(text_complet, fontsize=58, color='black',
-                                    font='BebasNeue-Regular.ttf',
-                                    method='caption', size=(950, None), align='center')
+                        s = TextClip(text, fontsize=58, color='black',
+                                     font='BebasNeue-Regular.ttf',
+                                     method='caption', size=(950, None), align='center')
                         s = (s.set_position(('center', int(H * 0.18) + dy))
                               .set_opacity(0.9)
                               .set_start(start).set_duration(durata)
                               .fadein(0.1).fadeout(0.2))
                         elemente.append(s)
-        
-                    # TEXT ALB — baza
-                    t_alb = TextClip(text_complet, fontsize=58, color='white',
-                                     font='BebasNeue-Regular.ttf',
-                                     method='caption', size=(950, None), align='center')
-                    t_alb = (t_alb.set_position(('center', int(H * 0.18)))
-                                  .set_start(start).set_duration(durata)
-                                  .fadein(0.1).fadeout(0.2))
-                    elemente.append(t_alb)
-        
-                    # CUVÂNT AURIU — peste textul alb, doar cuvântul 2
-                    t_auriu = TextClip(str_auriu, fontsize=62, color='#FFD700',
-                                       font='BebasNeue-Regular.ttf')
-        
-                    # Calculăm x pentru cuvântul auriu
-                    _base = TextClip(text_complet, fontsize=58, color='white',
-                                    font='BebasNeue-Regular.ttf',
-                                    method='caption', size=(950, None), align='center')
-                    _before = TextClip(str_inainte + " ", fontsize=58, color='white',
-                                       font='BebasNeue-Regular.ttf')
-                    x_auriu = (W - _base.w) // 2 + _before.w
-                    _base.close(); _before.close()
-        
-                    t_auriu = (t_auriu.set_position((x_auriu, int(H * 0.18)))
-                                      .set_start(start).set_duration(durata)
-                                      .fadein(0.1).fadeout(0.2))
-                    elemente.append(t_auriu)
+                    # TEXT ALB
+                    t = TextClip(text, fontsize=58, color='white',
+                                 font='BebasNeue-Regular.ttf',
+                                 method='caption', size=(950, None), align='center')
+                    t = (t.set_position(('center', int(H * 0.18)))
+                          .set_start(start).set_duration(durata)
+                          .fadein(0.1).fadeout(0.2))
+                    elemente.append(t)
 
-                # HOOK 1
+                # HOOK 1 — 0s până la 2.5s
                 text_complet = f"{str_inainte} {str_auriu} {str_dupa}".strip()
-                adauga_hook_centrat(text_complet, str_auriu, 0, 2.5)
+                adauga_hook_simplu(text_complet, 0, 2.5)
 
-                # HOOK 2
-                adauga_hook_centrat("HERE'S WHY... 👇", "HERE'S", 2.5, 1.5)
+                # HOOK 2 — 2.5s până la 4.0s
+                adauga_hook_simplu("HERE'S WHY... 👇", 2.5, 1.5)
             
             # ♠️ NETFLIX EPISODE BADGE — dreapta sus în zona poker
             if nume_plat == "youtube" and episod is not None and os.path.exists("BebasNeue-Regular.ttf"):
@@ -893,7 +954,7 @@ def main():
 ⏰ Price may change anytime — grab it now!
 
 🌟 Why everyone is buying this:
-This {TITLU_PRODUS} is going viral on Amazon right now! 
+This {produs_activ['nume']} is going viral on Amazon right now! 
 Thousands of 5-star reviews don't lie. 
 Check the link in bio before the price goes back up!
 
@@ -911,9 +972,9 @@ As an Amazon Associate, I earn from qualifying purchases. This helps support the
                 # Cream o lista de variatii vizuale ca sa facem fiecare titlu unic
                 emoji_spin = ["🤯", "🔥", "👀", "✨", "💯"]
                 if TIP_CONTINUT == "poker":
-                    titlu_unic = f"{TITLU_PRODUS} {emoji_spin[i]} | S{sezon} E{episod}"
+                    titlu_unic = f"{random.choice(produs_activ['titluri'])} {emoji_spin[i]} | S{sezon} E{episod}"
                 else:
-                    titlu_unic = f"{TITLU_PRODUS} {emoji_spin[i]} 🏆"
+                    titlu_unic = f"{random.choice(produs_activ['titluri'])} {emoji_spin[i]} 🏆"
                 adauga_in_imperiu(out_name, titlu_unic, desc_SEO, f"{nume_plat}_{i+1}", episod if episod is not None else 0)
                 print(f"📥 [DB] Salvat automat în pending: {out_name}")
             else:
